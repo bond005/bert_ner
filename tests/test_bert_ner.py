@@ -840,6 +840,18 @@ class TestBertNer(unittest.TestCase):
         true_bounds = [(0, 1), (1, 2), (2, 3), (3, 4), (9, 10)]
         self.assertEqual(true_bounds, BERT_NER.calculate_bounds_of_tokens(source_text, tokenized_text))
 
+    def test_calculate_bounds_of_tokens_positive05(self):
+        source_text = '–༼ ༽❆♖мама坦мыла раму'
+        tokenized_text = ['[UNK]', '[UNK]', '[UNK]', '[UNK]', '坦', 'мы', '##ла', 'р', '##ам', '##у']
+        true_bounds = [(0, 1), (1, 2), (3, 4), (4, 5), (10, 11), (11, 13), (13, 15), (16, 17), (17, 19), (19, 20)]
+        self.assertEqual(true_bounds, BERT_NER.calculate_bounds_of_tokens(source_text, tokenized_text))
+
+    def test_calculate_bounds_of_tokens_positive06(self):
+        source_text = 'Ёжик идёт домой'
+        tokenized_text = ['Ё', '##жи', '##к', 'идёт', 'домой']
+        true_bounds = [(0, 1), (1, 3), (3, 4), (5, 9), (10, 15)]
+        self.assertEqual(true_bounds, BERT_NER.calculate_bounds_of_tokens(source_text, tokenized_text))
+
     def test_detect_token_labels_positive01(self):
         source_text = 'Барак Обама принимает в Белом доме своего французского коллегу Николя Саркози.'
         tokenized_text = ['Ба', '##рак', 'Об', '##ама', 'принимает', 'в', 'Б', '##елом', 'доме', 'своего',
@@ -916,6 +928,9 @@ class TestBertNer(unittest.TestCase):
                        'rex', ')', ',', 'живший', '66', '–', '67', 'миллионов', 'лет', 'назад', ',', 'был', 'одним',
                        'из', 'крупнейших', 'когда', '-', 'либо', 'живших', 'сухопутных', 'хищников']
         self.assertEqual(true_tokens, BERT_NER.tokenize_by_character_groups(source_text))
+
+    def test_calculate_prediction_quality(self):
+        pass
 
 
 if __name__ == '__main__':
