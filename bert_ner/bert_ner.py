@@ -73,7 +73,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.sess_
         if self.random_seed is None:
             random.seed()
-            self.random_seed = random.randint()
+            self.random_seed = random.randint(0, 2147483647)
         else:
             random.seed(self.random_seed)
         config = tf.ConfigProto()
@@ -298,8 +298,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
-                    X[0][sample_idx][token_idx] = token_IDs[token_idx]
-                    X[1][sample_idx][token_idx] = 1
+                    X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
+                    X_tokenized[1][sample_idx][token_idx] = 1
         else:
             for sample_idx in range(n_samples):
                 source_text = X[sample_idx]
@@ -315,8 +315,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
-                    X[0][sample_idx][token_idx] = token_IDs[token_idx]
-                    X[1][sample_idx][token_idx] = 1
+                    X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
+                    X_tokenized[1][sample_idx][token_idx] = 1
         return X_tokenized, (None if y is None else np.array(y_tokenized))
 
     def calculate_bounds_of_named_entities(self, source_texts: Union[list, tuple, np.array],
@@ -1036,7 +1036,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     if len(ne_bounds) != 2:
                         raise ValueError('Item {0} of `{1}` is wrong, because named entity bounds `{2}` are not '
                                          'specified as 2-D list!'.format(idx, y_name, ne_bounds))
-                    if (ne_bounds[0] < 0) or (ne_bounds[1] < len(X[idx])) or (ne_bounds[0] >= ne_bounds[1]):
+                    if (ne_bounds[0] < 0) or (ne_bounds[1] > len(X[idx])) or (ne_bounds[0] >= ne_bounds[1]):
                         raise ValueError('Item {0} of `{1}` is wrong, because named entity bounds `{2}` are '
                                          'incorrect!'.format(idx, y_name, ne_bounds))
         return tuple(sorted(list(classes_list)))
