@@ -5,7 +5,6 @@ import random
 import tempfile
 from typing import Dict, Union, List, Tuple
 
-from nltk.tokenize.nist import NISTTokenizer
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -72,6 +71,11 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 self.sess_.graph.clear_collection(k)
             self.sess_.close()
             del self.sess_
+        if self.random_seed is None:
+            random.seed()
+            self.random_seed = random.randint()
+        else:
+            random.seed(self.random_seed)
         config = tf.ConfigProto()
         config.gpu_options.per_process_gpu_memory_fraction = self.gpu_memory_frac
         self.sess_ = tf.Session(config=config)
@@ -92,7 +96,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         bert_outputs = self.bert_module_(bert_inputs, signature='tokens', as_dict=True)
         sequence_output = bert_outputs['sequence_output']
         n_tags = len(self.classes_list_) * 2 + 1
-        he_init = tf.contrib.layers.variance_scaling_initializer()
+        he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         if self.finetune_bert:
             self.logits_ = tf.layers.dense(sequence_output, n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                            kernel_initializer=he_init, name='ner_outputs')
@@ -163,7 +167,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 batch_start = iteration * self.batch_size
                 batch_end = min(batch_start + self.batch_size, X_val[0].shape[0])
                 bounds_of_batches_for_validation.append((batch_start, batch_end))
-        random.seed(self.random_seed)
         init = tf.global_variables_initializer()
         saver = tf.train.Saver()
         init.run()
@@ -556,7 +559,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
 
     @staticmethod
     def get_temp_model_name() -> str:
-        return tempfile.TemporaryFile(mode='w', suffix='bert_crf.ckpt').name
+        return tempfile.NamedTemporaryFile(mode='w', suffix='bert_crf.ckpt').name
 
     @staticmethod
     def find_all_model_files(model_name: str) -> List[str]:
