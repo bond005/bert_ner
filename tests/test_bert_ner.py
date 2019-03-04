@@ -2013,7 +2013,7 @@ class TestBertNer(unittest.TestCase):
     def test_fit_positive01(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
         self.ner = BERT_NER(finetune_bert=False, max_epochs=3, batch_size=4, max_seq_length=128, gpu_memory_frac=0.9,
-                            random_seed=None)
+                            validation_fraction=0.3, random_seed=None)
         X_train, y_train = load_dataset(os.path.join(base_dir, 'true_named_entities.json'))
         res = self.ner.fit(X_train, y_train)
         self.assertIsInstance(res, BERT_NER)
@@ -2056,7 +2056,7 @@ class TestBertNer(unittest.TestCase):
     def test_fit_positive02(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
         self.ner = BERT_NER(finetune_bert=True, max_epochs=3, batch_size=2, max_seq_length=128, gpu_memory_frac=0.9,
-                            random_seed=42)
+                            validation_fraction=0.3, random_seed=42)
         X_train, y_train = load_dataset(os.path.join(base_dir, 'true_named_entities.json'))
         res = self.ner.fit(X_train, y_train)
         self.assertIsInstance(res, BERT_NER)
@@ -2100,7 +2100,7 @@ class TestBertNer(unittest.TestCase):
     def test_fit_predict(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
         self.ner = BERT_NER(finetune_bert=False, max_epochs=3, batch_size=4, max_seq_length=128, gpu_memory_frac=0.9,
-                            random_seed=None)
+                            validation_fraction=0.3, random_seed=None)
         X_train, y_train = load_dataset(os.path.join(base_dir, 'true_named_entities.json'))
         res = self.ner.fit(X_train, y_train)
         self.assertIsInstance(res, BERT_NER)
@@ -2159,7 +2159,7 @@ class TestBertNer(unittest.TestCase):
     def test_serialize_positive01(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
         self.ner = BERT_NER(finetune_bert=False, max_epochs=3, batch_size=4, max_seq_length=128, gpu_memory_frac=0.9,
-                            random_seed=None)
+                            validation_fraction=0.3, random_seed=None)
         X_train, y_train = load_dataset(os.path.join(base_dir, 'true_named_entities.json'))
         res = self.ner.fit(X_train, y_train)
         self.assertIsInstance(res, BERT_NER)
@@ -2303,7 +2303,7 @@ class TestBertNer(unittest.TestCase):
     def test_copy_positive02(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
         self.ner = BERT_NER(finetune_bert=False, max_epochs=3, batch_size=4, max_seq_length=128, gpu_memory_frac=0.9,
-                            random_seed=None)
+                            validation_fraction=0.3, random_seed=None)
         X_train, y_train = load_dataset(os.path.join(base_dir, 'true_named_entities.json'))
         self.ner.fit(X_train, y_train)
         self.another_ner = copy.copy(self.ner)
