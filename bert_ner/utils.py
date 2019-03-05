@@ -267,7 +267,8 @@ def factrueval2016_to_json(src_dir_name: str, dst_json_name: str):
                         named_entities[ne_type].append((ne_start, ne_end))
                     else:
                         named_entities[ne_type] = [(ne_start, ne_end)]
-        train_data.append({'text': text, 'named_entities': named_entities, 'paragraph_bounds': paragraphs})
+        train_data.append({'text': text, 'named_entities': named_entities, 'paragraph_bounds': paragraphs,
+                           'base_name': base_name})
     with codecs.open(dst_json_name, mode='w', encoding='utf-8', errors='ignore') as fp:
         json.dump(train_data, fp, indent=4, ensure_ascii=False)
 
@@ -357,8 +358,7 @@ def find_paragraph(bounds_of_paragraphs: List[Tuple[int, int]], entity_start_idx
 
 def load_dataset(file_name: str) -> Tuple[List[str], List[Dict[str, List[Tuple[int, int]]]]]:
 
-    def prepare_bounds(source_text: str,
-                       source_named_entities: Dict[str, List[List[int]]]) -> Dict[str, List[Tuple[int, int]]]:
+    def prepare_bounds(source_named_entities: Dict[str, List[List[int]]]) -> Dict[str, List[Tuple[int, int]]]:
         prepared_named_entities = dict()
         for cur_ne in source_named_entities:
             new_list = []
@@ -499,5 +499,5 @@ def load_dataset(file_name: str) -> Tuple[List[str], List[Dict[str, List[Tuple[i
                 del entities_by_paragraphs_
         else:
             X.append(sample_value['text'])
-            y.append(prepare_bounds(sample_value['text'], sample_value['named_entities']))
+            y.append(prepare_bounds(sample_value['named_entities']))
     return X, y

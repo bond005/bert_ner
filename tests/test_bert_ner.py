@@ -2207,7 +2207,7 @@ class TestBertNer(unittest.TestCase):
         self.assertGreater(f1, 0.0)
         self.assertGreater(precision, 0.0)
         self.assertGreater(recall, 0.0)
-        self.temp_file_name = tempfile.NamedTemporaryFile().name
+        self.temp_file_name = tempfile.NamedTemporaryFile(mode='w').name
         with open(self.temp_file_name, mode='wb') as fp:
             pickle.dump(res, fp)
         del res, self.ner
