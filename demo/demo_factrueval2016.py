@@ -1,17 +1,18 @@
 from argparse import ArgumentParser
 import codecs
 import json
+import logging
 import os
 import pickle
 import sys
 import tempfile
 
 try:
-    from bert_ner.bert_ner import BERT_NER
+    from bert_ner.bert_ner import BERT_NER, bert_ner_logger
     from bert_ner.utils import factrueval2016_to_json, load_dataset
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    from bert_ner.bert_ner import BERT_NER
+    from bert_ner.bert_ner import BERT_NER, bert_ner_logger
     from bert_ner.utils import factrueval2016_to_json, load_dataset
 
 
@@ -117,4 +118,9 @@ def main():
 
 
 if __name__ == '__main__':
+    bert_ner_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s')
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    bert_ner_logger.addHandler(handler)
     main()

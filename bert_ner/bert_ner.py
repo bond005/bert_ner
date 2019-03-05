@@ -141,7 +141,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         with tf.name_scope('eval'):
             seq_scores = tf.contrib.crf.crf_sequence_score(self.logits_, self.y_ph_, sequence_lengths,
                                                            self.transition_params_)
-            accuracy = tf.reduce_mean(tf.cast(seq_scores, tf.float32))
+            seq_norm = tf.contrib.crf.crf_log_norm(self.logits_, sequence_lengths, self.transition_params_)
+            accuracy = tf.reduce_mean(tf.cast(seq_scores, tf.float32) / tf.cast(seq_norm, tf.float32))
         X_tokenized, y_tokenized = self.tokenize_all(X, y)
         if self.validation_fraction is not None:
             n_validation = int(round(len(X) * self.validation_fraction))
@@ -151,7 +152,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 for sample_idx in range(len(y)):
                     labels_for_sample = set()
                     for token_idx in range(self.max_seq_length):
-                        labels_for_sample.add(y_tokenized[sample_idx][token_idx])
+                        if (y_tokenized[sample_idx][token_idx] % 2) == 0:
+                            labels_for_sample.add(y_tokenized[sample_idx][token_idx] // 2)
+                        else:
+                            labels_for_sample.add((y_tokenized[sample_idx][token_idx] + 1) // 2)
                     labels_for_splitting.append(''.join([str(cur) for cur in sorted(list(labels_for_sample))]))
                 labels_for_splitting = np.array(labels_for_splitting, dtype=object)
                 train_index, test_index = next(sss.split(X_tokenized[0], labels_for_splitting))
@@ -200,6 +204,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 bert_ner_logger.info('Epoch   Train acc.')
             else:
                 bert_ner_logger.info('Epoch   Train acc.   Test acc.')
+        n_epochs_without_improving = 0
         try:
             best_acc = None
             for epoch in range(self.max_epochs):
@@ -230,20 +235,32 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     if best_acc is None:
                         best_acc = acc_test
                         saver.save(self.sess_, tmp_model_name)
+                        n_epochs_without_improving = 0
                     elif acc_test > best_acc:
                         best_acc = acc_test
                         saver.save(self.sess_, tmp_model_name)
+                        n_epochs_without_improving = 0
+                    else:
+                        n_epochs_without_improving += 1
                     if self.verbose:
                         bert_ner_logger.info('{0:>5}   {1:>10.8f}   {2:>10.8f}'.format(epoch, acc_train, acc_test))
                 else:
                     if best_acc is None:
                         best_acc = acc_train
                         saver.save(self.sess_, tmp_model_name)
+                        n_epochs_without_improving = 0
                     elif acc_train > best_acc:
                         best_acc = acc_train
                         saver.save(self.sess_, tmp_model_name)
+                        n_epochs_without_improving = 0
+                    else:
+                        n_epochs_without_improving += 1
                     if self.verbose:
                         bert_ner_logger.info('{0:>5}   {1:>10.8f}'.format(epoch, acc_train))
+                if n_epochs_without_improving >= self.patience:
+                    if self.verbose:
+                        bert_ner_logger.info('Epoch %05d: early stopping' % (epoch + 1))
+                    break
             if best_acc is not None:
                 saver.restore(self.sess_, tmp_model_name)
         finally:
@@ -286,7 +303,15 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 viterbi_seq, viterbi_score = tf.contrib.crf.viterbi_decode(logit, trans_params)
                 y_pred += [viterbi_seq]
         del bounds_of_batches
-        return self.calculate_bounds_of_named_entities(X, X_tokenized[0], y_pred[0:n_samples])
+        recognized_entities_in_texts = []
+        for sample_idx, labels_in_text in enumerate(y_pred[0:n_samples]):
+            n_tokens = len(labels_in_text)
+            tokens = self.tokenizer_.convert_ids_to_tokens(X_tokenized[0][sample_idx][1:(n_tokens - 1)])
+            bounds_of_tokens = self.calculate_bounds_of_tokens(X[sample_idx], tokens)
+            recognized_entities_in_texts.append(
+                self.calculate_bounds_of_named_entities(bounds_of_tokens, self.classes_list_, labels_in_text)
+            )
+        return recognized_entities_in_texts
 
     def is_fitted(self):
         check_is_fitted(self, ['classes_list_', 'bert_module_', 'logits_', 'transition_params_', 'tokenizer_',
@@ -380,43 +405,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
                     X_tokenized[1][sample_idx][token_idx] = 1
         return X_tokenized, (None if y is None else np.array(y_tokenized))
-
-    def calculate_bounds_of_named_entities(self, source_texts: Union[list, tuple, np.array],
-                                           tokenized_texts: np.ndarray,
-                                           predicted_labels: List[Union[List[int], np.ndarray]]) -> \
-            List[Dict[str, List[Tuple[int, int]]]]:
-        res = []
-        for sample_idx in range(len(source_texts)):
-            named_entities_for_text = dict()
-            n_tokens = len(predicted_labels[sample_idx])
-            source_text = source_texts[sample_idx]
-            tokens = self.tokenizer_.convert_ids_to_tokens(tokenized_texts[sample_idx][1:(n_tokens - 1)])
-            labels = predicted_labels[sample_idx][1:(n_tokens - 1)]
-            bounds_of_tokens = self.calculate_bounds_of_tokens(source_text, tokens)
-            ne_ID = 0
-            ne_start = -1
-            for token_idx in range(n_tokens - 2):
-                if labels[token_idx] > 0:
-                    if ne_ID != labels[token_idx]:
-                        if ne_ID > 0:
-                            named_entities_for_text[self.classes_list_[(ne_ID - 1) // 2]] = \
-                                named_entities_for_text.get(self.classes_list_[(ne_ID - 1) // 2], []) + \
-                                [(bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])]
-                        ne_ID = labels[token_idx]
-                        ne_start = token_idx
-                else:
-                    if ne_ID > 0:
-                        named_entities_for_text[self.classes_list_[(ne_ID - 1) // 2]] = \
-                            named_entities_for_text.get(self.classes_list_[(ne_ID - 1) // 2], []) + \
-                            [(bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])]
-                        ne_ID = 0
-                        ne_start = -1
-            if ne_ID >= 0:
-                named_entities_for_text[self.classes_list_[(ne_ID - 1) // 2]] = \
-                    named_entities_for_text.get(self.classes_list_[(ne_ID - 1) // 2], []) + \
-                    [(bounds_of_tokens[ne_start][0], bounds_of_tokens[-1][1])]
-            res.append(named_entities_for_text)
-        return res
 
     def get_params(self, deep=True) -> dict:
         return {'bert_hub_module_handle': self.bert_hub_module_handle, 'finetune_bert': self.finetune_bert,
@@ -995,6 +983,66 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             bounds_of_tokens.append((start_pos + found_idx, start_pos + found_idx + n))
             start_pos += (found_idx + n)
         return bounds_of_tokens
+
+    @staticmethod
+    def calculate_bounds_of_named_entities(bounds_of_tokens: List[Tuple[int, int]], classes_list: tuple,
+                                           token_labels: List[int]) -> Dict[str, List[Tuple[int, int]]]:
+        named_entities_for_text = dict()
+        ne_start = -1
+        ne_type = ''
+        n_tokens = len(bounds_of_tokens)
+        for token_idx in range(n_tokens):
+            class_id = token_labels[token_idx]
+            if class_id > 0:
+                if ne_start < 0:
+                    ne_start = token_idx
+                    ne_type = classes_list[(class_id - 1) // 2]
+                else:
+                    if class_id % 2 == 0:
+                        if ne_type in named_entities_for_text:
+                            named_entities_for_text[ne_type].append(
+                                (bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])
+                            )
+                        else:
+                            named_entities_for_text[ne_type] = [
+                                (bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])
+                            ]
+                        ne_start = token_idx
+                        ne_type = classes_list[(class_id - 1) // 2]
+                    else:
+                        if classes_list[(class_id - 1) // 2] != ne_type:
+                            if ne_type in named_entities_for_text:
+                                named_entities_for_text[ne_type].append(
+                                    (bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])
+                                )
+                            else:
+                                named_entities_for_text[ne_type] = [
+                                    (bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])
+                                ]
+                            ne_start = token_idx
+                            ne_type = classes_list[(class_id - 1) // 2]
+            else:
+                if ne_start >= 0:
+                    if ne_type in named_entities_for_text:
+                        named_entities_for_text[ne_type].append(
+                            (bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])
+                        )
+                    else:
+                        named_entities_for_text[ne_type] = [
+                            (bounds_of_tokens[ne_start][0], bounds_of_tokens[token_idx - 1][1])
+                        ]
+                    ne_start = -1
+                    ne_type = ''
+        if ne_start >= 0:
+            if ne_type in named_entities_for_text:
+                named_entities_for_text[ne_type].append(
+                    (bounds_of_tokens[ne_start][0], bounds_of_tokens[-1][1])
+                )
+            else:
+                named_entities_for_text[ne_type] = [
+                    (bounds_of_tokens[ne_start][0], bounds_of_tokens[-1][1])
+                ]
+        return named_entities_for_text
 
     @staticmethod
     def calculate_indices_of_named_entities(source_text: str, classes_list: tuple,

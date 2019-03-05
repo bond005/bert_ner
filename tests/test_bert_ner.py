@@ -2354,6 +2354,23 @@ class TestBertNer(unittest.TestCase):
         self.assertIs(self.ner.y_ph_, self.another_ner.y_ph_)
         self.assertIs(self.ner.sess_, self.another_ner.sess_)
 
+    def test_calculate_bounds_of_named_entities(self):
+        bounds_of_tokens = [(0, 2), (2, 5), (5, 8), (8, 10), (11, 16), (17, 20), (20, 22), (22, 26), (26, 27), (28, 31),
+                            (31, 34), (34, 37), (38, 48), (49, 52), (52, 54), (55, 57), (58, 59), (59, 61), (61, 63),
+                            (64, 70), (71, 83), (84, 87), (87, 90), (90, 93), (93, 95), (95, 98), (98, 99)]
+        classes_list = ('LOCATION', 'ORG', 'PERSON')
+        labels_of_tokens = [0, 0, 2, 1, 1, 2, 1, 0, 0, 0, 4, 3, 0, 6, 5, 5, 5, 0, 5, 5, 0, 2, 2, 3, 3, 6, 5]
+        true_entities = {
+            'LOCATION': [(5, 16), (17, 22), (84, 87), (87, 90)],
+            'ORG': [(31, 37), (90, 95)],
+            'PERSON': [(49, 59), (61, 70), (95, 99)]
+        }
+        calc_entities = BERT_NER.calculate_bounds_of_named_entities(bounds_of_tokens, classes_list, labels_of_tokens)
+        self.assertIsInstance(calc_entities, dict)
+        self.assertEqual(set(true_entities.keys()), set(calc_entities.keys()))
+        for entity_type in true_entities:
+            self.assertEqual(true_entities[entity_type], calc_entities[entity_type])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

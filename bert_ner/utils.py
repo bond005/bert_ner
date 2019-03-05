@@ -118,43 +118,42 @@ def load_spans_from_factrueval2016(spans_file_name: str,
                     raise ValueError(err_msg)
                 try:
                     span_id = int(parts_of_line[0])
-                    if span_id in spans:
-                        span_id = -1
                 except:
                     span_id = -1
                 if span_id < 0:
                     raise ValueError(err_msg)
-                try:
-                    found_idx = parts_of_line.index('#')
-                except:
-                    found_idx = -1
-                if found_idx < 0:
-                    raise ValueError(err_msg)
-                if (len(parts_of_line) - 1 - found_idx) < 2:
-                    raise ValueError(err_msg)
-                if (len(parts_of_line) - 1 - found_idx) % 2 != 0:
-                    raise ValueError(err_msg)
-                n = (len(parts_of_line) - 1 - found_idx) // 2
-                token_IDs = []
-                try:
-                    for idx in range(found_idx + 1, found_idx + n + 1):
-                        new_token_ID = int(parts_of_line[idx])
-                        if new_token_ID in token_IDs:
-                            token_IDs = []
-                            break
-                        if new_token_ID not in tokens_dict:
-                            token_IDs = []
-                            break
-                        token_IDs.append(new_token_ID)
-                        if token_IDs[-1] < 0:
-                            token_IDs = []
-                            break
-                except:
+                if span_id not in spans:
+                    try:
+                        found_idx = parts_of_line.index('#')
+                    except:
+                        found_idx = -1
+                    if found_idx < 0:
+                        raise ValueError(err_msg)
+                    if (len(parts_of_line) - 1 - found_idx) < 2:
+                        raise ValueError(err_msg)
+                    if (len(parts_of_line) - 1 - found_idx) % 2 != 0:
+                        raise ValueError(err_msg)
+                    n = (len(parts_of_line) - 1 - found_idx) // 2
                     token_IDs = []
-                if len(token_IDs) == 0:
-                    raise ValueError(err_msg)
-                spans[span_id] = token_IDs
-                del token_IDs
+                    try:
+                        for idx in range(found_idx + 1, found_idx + n + 1):
+                            new_token_ID = int(parts_of_line[idx])
+                            if new_token_ID in token_IDs:
+                                token_IDs = []
+                                break
+                            if new_token_ID not in tokens_dict:
+                                token_IDs = []
+                                break
+                            token_IDs.append(new_token_ID)
+                            if token_IDs[-1] < 0:
+                                token_IDs = []
+                                break
+                    except:
+                        token_IDs = []
+                    if len(token_IDs) == 0:
+                        raise ValueError(err_msg)
+                    spans[span_id] = token_IDs
+                    del token_IDs
             cur_line = fp.readline()
             line_idx += 1
     return spans
@@ -225,8 +224,6 @@ def factrueval2016_to_json(src_dir_name: str, dst_json_name: str):
             base_name = cur_file_name[:-len('.spans')]
         elif cur_file_name.endswith('.tokens'):
             base_name = cur_file_name[:-len('.tokens')]
-        elif cur_file_name.endswith('.txt'):
-            base_name = cur_file_name[:-len('.txt')]
         else:
             base_name = None
         if base_name is not None:
@@ -236,9 +233,13 @@ def factrueval2016_to_json(src_dir_name: str, dst_json_name: str):
             else:
                 factrueval_files[base_name] = [cur_file_name]
     for base_name in factrueval_files:
-        factrueval_files[base_name] = sorted(factrueval_files[base_name])
-        if len(factrueval_files[base_name]) != 4:
+        if len(factrueval_files[base_name]) != 3:
             raise ValueError('Files list for `{0}` is wrong!'.format(base_name))
+        text_file_name = os.path.join(src_dir_name, base_name + '.txt')
+        if not os.path.isfile(text_file_name):
+            raise ValueError('File `{0}` does not exist!'.format(text_file_name))
+        factrueval_files[base_name].append(text_file_name)
+        factrueval_files[base_name] = sorted(factrueval_files[base_name])
     train_data = []
     for base_name in sorted(list(factrueval_files.keys())):
         tokens, text, paragraphs = load_tokens_from_factrueval2016(os.path.join(src_dir_name, base_name + '.txt'),
@@ -398,9 +399,11 @@ def load_dataset(file_name: str) -> Tuple[List[str], List[Dict[str, List[Tuple[i
         if 'paragraph_bounds' in sample_value:
             bounds_of_paragraphs = sample_value['paragraph_bounds']
             if len(sample_value) > 3:
-                raise ValueError('{0} sample in the file `{1}` contains incorrect data! Keys {2} are excess!'.format(
-                    sample_idx, file_name,
-                    sorted(list(set(sample_value.keys()) - {'text', 'named_entities', 'paragraph_bounds'}))))
+                excess_keys = sorted(list(set(sample_value.keys()) - {'text', 'named_entities', 'paragraph_bounds',
+                                                                      'base_name'}))
+                if len(excess_keys) > 0:
+                    raise ValueError('{0} sample in the file `{1}` contains incorrect data! Keys {2} are '
+                                     'excess!'.format(sample_idx, file_name, excess_keys))
             if not isinstance(sample_value['paragraph_bounds'], list):
                 raise ValueError(
                     '{0} sample in the file `{1}` contains incorrect data! Value of `paragraph_bounds` must be '
@@ -409,9 +412,10 @@ def load_dataset(file_name: str) -> Tuple[List[str], List[Dict[str, List[Tuple[i
         else:
             bounds_of_paragraphs = None
             if len(sample_value) > 2:
-                raise ValueError('{0} sample in the file `{1}` contains incorrect data! Keys {2} are excess!'.format(
-                    sample_idx, file_name,
-                    sorted(list(set(sample_value.keys()) - {'text', 'named_entities'}))))
+                excess_keys = sorted(list(set(sample_value.keys()) - {'text', 'named_entities', 'base_name'}))
+                if len(excess_keys) > 0:
+                    raise ValueError('{0} sample in the file `{1}` contains incorrect data! Keys {2} are '
+                                     'excess!'.format(sample_idx, file_name, excess_keys))
         if not isinstance(sample_value['text'], str):
             raise ValueError('{0} sample in the file `{1}` contains incorrect data! Value of `text` must be a `{2}`, '
                              'but it is a `{3}`.'.format(sample_idx, file_name, type('123'),
