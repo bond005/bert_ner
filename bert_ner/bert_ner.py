@@ -163,8 +163,13 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 train_op = optimizer.minimize(final_loss)
             else:
                 grads_and_vars = optimizer.compute_gradients(final_loss)
-                capped_gvs = [(tf.clip_by_norm(grad, 5.0, name='grad_clipping_{0}'.format(idx + 1)), var)
-                              for idx, (grad, var) in enumerate(grads_and_vars)]
+                capped_gvs = [
+                    (grad, var) if grad is None else (
+                        tf.clip_by_norm(grad, 5.0, name='grad_clipping_{0}'.format(idx + 1)),
+                        var
+                    )
+                    for idx, (grad, var) in enumerate(grads_and_vars)
+                ]
                 train_op = optimizer.apply_gradients(capped_gvs)
         with tf.name_scope('eval'):
             seq_scores = tf.contrib.crf.crf_sequence_score(self.logits_, self.y_ph_, sequence_lengths,
