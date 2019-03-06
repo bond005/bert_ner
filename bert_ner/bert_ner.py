@@ -21,13 +21,14 @@ bert_ner_logger = logging.getLogger(__name__)
 class BERT_NER(BaseEstimator, ClassifierMixin):
     def __init__(self, bert_hub_module_handle: str='https://tfhub.dev/google/bert_multi_cased_L-12_H-768_A-12/1',
                  finetune_bert: bool=False, batch_size: int=32, max_seq_length: int=512, lr: float=1e-3,
-                 l2_reg: float=1e-4, validation_fraction: float=0.1, max_epochs: int=10, patience: int=3,
-                 gpu_memory_frac: float=1.0, verbose: bool=False, random_seed: int=None):
+                 lstm_units: int=256, l2_reg: float=1e-4, validation_fraction: float=0.1, max_epochs: int=10,
+                 patience: int=3, gpu_memory_frac: float=1.0, verbose: bool=False, random_seed: int=None):
         self.batch_size = batch_size
         self.lr = lr
         self.l2_reg = l2_reg
         self.bert_hub_module_handle = bert_hub_module_handle
         self.finetune_bert = finetune_bert
+        self.lstm_units = lstm_units
         self.max_epochs = max_epochs
         self.patience = patience
         self.random_seed = random_seed
@@ -63,9 +64,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
     def fit(self, X: Union[list, tuple, np.array], y: Union[list, tuple, np.array]):
         self.check_params(
             bert_hub_module_handle=self.bert_hub_module_handle, finetune_bert=self.finetune_bert,
-            batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr, l2_reg=self.l2_reg,
-            validation_fraction=self.validation_fraction, max_epochs=self.max_epochs, patience=self.patience,
-            gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose, random_seed=self.random_seed
+            lstm_units=self.lstm_units, batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr,
+            l2_reg=self.l2_reg, validation_fraction=self.validation_fraction, max_epochs=self.max_epochs,
+            patience=self.patience, gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose,
+            random_seed=self.random_seed
         )
         self.classes_list_ = self.check_Xy(X, 'X', y, 'y')
         if hasattr(self, 'tokenizer_'):
@@ -271,9 +273,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
     def predict(self, X: Union[list, tuple, np.array]) -> List[Dict[str, List[Tuple[int, int]]]]:
         self.check_params(
             bert_hub_module_handle=self.bert_hub_module_handle, finetune_bert=self.finetune_bert,
-            batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr, l2_reg=self.l2_reg,
-            validation_fraction=self.validation_fraction, max_epochs=self.max_epochs, patience=self.patience,
-            gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose, random_seed=self.random_seed
+            lstm_units=self.lstm_units, batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr,
+            l2_reg=self.l2_reg, validation_fraction=self.validation_fraction, max_epochs=self.max_epochs,
+            patience=self.patience, gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose,
+            random_seed=self.random_seed
         )
         self.check_X(X, 'X')
         self.is_fitted()
@@ -398,8 +401,13 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     tokenized_text, bounds_of_tokens, indices_of_named_entities, labels_IDs, self.max_seq_length
                 )
                 if len(tokenized_text) > (self.max_seq_length - 2):
+                    n = self.max_seq_length - 1
                     tokenized_text = tokenized_text[:(self.max_seq_length - 2)]
+                else:
+                    n = len(tokenized_text) + 1
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
+                y_tokenized[sample_idx][0] = len(self.classes_list_) * 2 + 1
+                y_tokenized[sample_idx][n] = len(self.classes_list_) * 2 + 2
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
@@ -408,10 +416,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
 
     def get_params(self, deep=True) -> dict:
         return {'bert_hub_module_handle': self.bert_hub_module_handle, 'finetune_bert': self.finetune_bert,
-                'batch_size': self.batch_size, 'max_seq_length': self.max_seq_length, 'lr': self.lr,
-                'l2_reg': self.l2_reg, 'validation_fraction': self.validation_fraction, 'max_epochs': self.max_epochs,
-                'patience': self.patience, 'gpu_memory_frac': self.gpu_memory_frac, 'verbose': self.verbose,
-                'random_seed': self.random_seed}
+                'lstm_units': self.lstm_units, 'batch_size': self.batch_size, 'max_seq_length': self.max_seq_length,
+                'lr': self.lr, 'l2_reg': self.l2_reg, 'validation_fraction': self.validation_fraction,
+                'max_epochs': self.max_epochs, 'patience': self.patience, 'gpu_memory_frac': self.gpu_memory_frac,
+                'verbose': self.verbose, 'random_seed': self.random_seed}
 
     def set_params(self, **params):
         for parameter, value in params.items():
@@ -423,9 +431,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         result = cls.__new__(cls)
         result.set_params(
             bert_hub_module_handle=self.bert_hub_module_handle, finetune_bert=self.finetune_bert,
-            batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr, l2_reg=self.l2_reg,
-            validation_fraction=self.validation_fraction, max_epochs=self.max_epochs, patience=self.patience,
-            gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose, random_seed=self.random_seed
+            lstm_units=self.lstm_units, batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr,
+            l2_reg=self.l2_reg, validation_fraction=self.validation_fraction, max_epochs=self.max_epochs,
+            patience=self.patience, gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose,
+            random_seed=self.random_seed
         )
         try:
             self.is_fitted()
@@ -450,9 +459,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         result = cls.__new__(cls)
         result.set_params(
             bert_hub_module_handle=self.bert_hub_module_handle, finetune_bert=self.finetune_bert,
-            batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr, l2_reg=self.l2_reg,
-            validation_fraction=self.validation_fraction, max_epochs=self.max_epochs, patience=self.patience,
-            gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose, random_seed=self.random_seed
+            lstm_units=self.lstm_units, batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr,
+            l2_reg=self.l2_reg, validation_fraction=self.validation_fraction, max_epochs=self.max_epochs,
+            patience=self.patience, gpu_memory_frac=self.gpu_memory_frac, verbose=self.verbose,
+            random_seed=self.random_seed
         )
         try:
             self.is_fitted()
@@ -644,6 +654,16 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         if kwargs['batch_size'] < 1:
             raise ValueError('`batch_size` is wrong! Expected a positive integer value, '
                              'but {0} is not positive.'.format(kwargs['batch_size']))
+        if 'lstm_units' not in kwargs:
+            raise ValueError('`lstm_units` is not specified!')
+        if kwargs['lstm_units'] is not None:
+            if (not isinstance(kwargs['lstm_units'], int)) and (not isinstance(kwargs['lstm_units'], np.int32)) and \
+                    (not isinstance(kwargs['lstm_units'], np.uint32)):
+                raise ValueError('`lstm_units` is wrong! Expected `{0}`, got `{1}`.'.format(
+                    type(3), type(kwargs['lstm_units'])))
+            if kwargs['lstm_units'] < 1:
+                raise ValueError('`lstm_units` is wrong! Expected a positive integer value, '
+                                 'but {0} is not positive.'.format(kwargs['lstm_units']))
         if 'lr' not in kwargs:
             raise ValueError('`lr` is not specified!')
         if (not isinstance(kwargs['lr'], float)) and (not isinstance(kwargs['lr'], np.float32)) and \
