@@ -7,6 +7,8 @@ import pickle
 import sys
 import tempfile
 
+from typing import Union
+
 try:
     from bert_ner.bert_ner import BERT_NER, bert_ner_logger
     from bert_ner.utils import factrueval2016_to_json, load_dataset
@@ -16,8 +18,8 @@ except:
     from bert_ner.utils import factrueval2016_to_json, load_dataset
 
 
-def train(factrueval2016_devset_dir: str, bert_will_be_tuned: bool, max_epochs: int, batch_size: int,
-          gpu_memory_frac: float, model_name: str) -> BERT_NER:
+def train(factrueval2016_devset_dir: str, bert_will_be_tuned: bool, lstm_layer_size: Union[int, None], max_epochs: int,
+          batch_size: int, gpu_memory_frac: float, model_name: str) -> BERT_NER:
     if os.path.isfile(model_name):
         with open(model_name, 'rb') as fp:
             recognizer = pickle.load(fp)
@@ -35,10 +37,16 @@ def train(factrueval2016_devset_dir: str, bert_will_be_tuned: bool, max_epochs: 
         print('Data for training have been loaded...')
         print('Number of samples is {0}.'.format(len(y)))
         print('')
-        recognizer = BERT_NER(finetune_bert=bert_will_be_tuned, batch_size=batch_size, l2_reg=1e-4,
-                              validation_fraction=0.1, max_epochs=max_epochs, patience=3,
-                              gpu_memory_frac=gpu_memory_frac, verbose=True, random_seed=42,
-                              lr=1e-5 if bert_will_be_tuned else 1e-3)
+        if BERT_NER.PATH_TO_BERT is None:
+            bert_hub_module_handle = 'https://tfhub.dev/google/bert_multi_cased_L-12_H-768_A-12/1'
+        else:
+            bert_hub_module_handle = None
+        recognizer = BERT_NER(
+            finetune_bert=bert_will_be_tuned, batch_size=batch_size, l2_reg=1e-4,
+            bert_hub_module_handle=bert_hub_module_handle, lstm_units=lstm_layer_size, validation_fraction=0.1,
+            max_epochs=max_epochs, patience=3, gpu_memory_frac=gpu_memory_frac, verbose=True, random_seed=42,
+            lr=1e-5 if bert_will_be_tuned else 1e-3
+        )
         recognizer.fit(X, y)
         with open(model_name, 'wb') as fp:
             pickle.dump(recognizer, fp)
@@ -117,17 +125,31 @@ def main():
                         help='Size of mini-batch.')
     parser.add_argument('--max_epochs', dest='max_epochs', type=int, required=False, default=10,
                         help='Maximal number of training epochs.')
+    parser.add_argument('--lstm', dest='lstm_units', type=int, required=False, default=None,
+                        help='The LSTM layer size (if it is not specified, than the LSTM layer is not used).')
     parser.add_argument('--gpu_frac', dest='gpu_memory_frac', type=float, required=False, default=0.9,
                         help='Allocable part of the GPU memory for the NER model.')
     parser.add_argument('--finetune_bert', dest='finetune_bert', required=False, action='store_true',
                         default=False, help='Will be the BERT and CRF finetuned together? Or the BERT will be frozen?')
+    parser.add_argument('--path_to_bert', dest='path_to_bert', required=False, type=str,
+                        default=None, help='Path to the BERT model (if it is not specified, than the standard '
+                                           'multilingual BERT model from the TF-Hub will be used).')
     args = parser.parse_args()
 
+    if args.path_to_bert is None:
+        path_to_bert = None
+    else:
+        path_to_bert = os.path.normpath(args.path_to_bert)
+        if len(path_to_bert) == 0:
+            raise ValueError('The BERT model cannot be contained into the current directory!')
+        if not os.path.isdir(path_to_bert):
+            raise ValueError('The directory `{0}` does not exist!'.format(path_to_bert))
+    BERT_NER.PATH_TO_BERT = path_to_bert
     devset_dir_name = os.path.join(os.path.normpath(args.data_name), 'devset')
     testset_dir_name = os.path.join(os.path.normpath(args.data_name), 'testset')
     recognizer = train(factrueval2016_devset_dir=devset_dir_name, bert_will_be_tuned=args.finetune_bert,
                        max_epochs=args.max_epochs, batch_size=args.batch_size, gpu_memory_frac=args.gpu_memory_frac,
-                       model_name=os.path.normpath(args.model_name))
+                       model_name=os.path.normpath(args.model_name), lstm_layer_size=args.lstm_units)
     recognize(factrueval2016_testset_dir=testset_dir_name, recognizer=recognizer,
               results_dir=os.path.normpath(args.result_name))
 
