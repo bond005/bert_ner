@@ -122,7 +122,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         sequence_output = bert_outputs['sequence_output']
         n_tags = len(self.classes_list_) * 2 + 3
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
-        glorot_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed, mode='FAN_AVG')
+        glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
         sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
         if self.lstm_units is None:
             if self.finetune_bert:
