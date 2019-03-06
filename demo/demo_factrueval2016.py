@@ -23,6 +23,7 @@ def train(factrueval2016_devset_dir: str, bert_will_be_tuned: bool, max_epochs: 
             recognizer = pickle.load(fp)
         assert isinstance(recognizer, BERT_NER)
         print('The NER has been successfully loaded from the file `{0}`...'.format(model_name))
+        print('')
     else:
         temp_json_name = tempfile.NamedTemporaryFile(mode='w').name
         try:
@@ -31,6 +32,9 @@ def train(factrueval2016_devset_dir: str, bert_will_be_tuned: bool, max_epochs: 
         finally:
             if os.path.isfile(temp_json_name):
                 os.remove(temp_json_name)
+        print('Data for training have been loaded...')
+        print('Number of samples is {0}.'.format(len(y)))
+        print('')
         recognizer = BERT_NER(finetune_bert=bert_will_be_tuned, batch_size=batch_size, l2_reg=1e-4,
                               validation_fraction=0.1, max_epochs=max_epochs, patience=3,
                               gpu_memory_frac=gpu_memory_frac, verbose=True, random_seed=42,
@@ -40,6 +44,7 @@ def train(factrueval2016_devset_dir: str, bert_will_be_tuned: bool, max_epochs: 
             pickle.dump(recognizer, fp)
         print('')
         print('The NER has been successfully fitted and saved into the file `{0}`...'.format(model_name))
+        print('')
     return recognizer
 
 
@@ -60,7 +65,11 @@ def recognize(factrueval2016_testset_dir: str, recognizer: BERT_NER, results_dir
         for cur_paragraph in cur_document['paragraph_bounds']:
             texts.append(cur_document['text'][cur_paragraph[0]:cur_paragraph[1]])
             additional_info.append((base_name, cur_paragraph))
+    print('Data for final testing have been loaded...')
+    print('Number of samples is {0}.'.format(len(true_entities)))
+    print('')
     predicted_entities = recognizer.predict(texts)
+    assert len(predicted_entities) == len(true_entities)
     f1, precision, recall = recognizer.calculate_prediction_quality(true_entities, predicted_entities,
                                                                     recognizer.classes_list_)
     print('F1-score is {0:.2%}.'.format(f1))
