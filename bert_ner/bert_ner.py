@@ -118,7 +118,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         )
         bert_outputs = self.bert_module_(bert_inputs, signature='tokens', as_dict=True)
         sequence_output = bert_outputs['sequence_output']
-        n_tags = len(self.classes_list_) * 2 + 1
+        n_tags = len(self.classes_list_) * 2 + 3
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         if self.finetune_bert:
             self.logits_ = tf.layers.dense(sequence_output, n_tags, activation=None,
@@ -401,13 +401,13 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     tokenized_text, bounds_of_tokens, indices_of_named_entities, labels_IDs, self.max_seq_length
                 )
                 if len(tokenized_text) > (self.max_seq_length - 2):
-                    # n = self.max_seq_length - 1
+                    n = self.max_seq_length - 1
                     tokenized_text = tokenized_text[:(self.max_seq_length - 2)]
-                # else:
-                #     n = len(tokenized_text) + 1
+                else:
+                    n = len(tokenized_text) + 1
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
-                # y_tokenized[sample_idx][0] = len(self.classes_list_) * 2 + 1
-                # y_tokenized[sample_idx][n] = len(self.classes_list_) * 2 + 2
+                y_tokenized[sample_idx][0] = len(self.classes_list_) * 2 + 1
+                y_tokenized[sample_idx][n] = len(self.classes_list_) * 2 + 2
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
