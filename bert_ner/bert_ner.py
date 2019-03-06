@@ -121,6 +121,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             self.tokenizer_ = FullTokenizer(vocab_file=vocab_file, do_lower_case=do_lower_case)
             bert_outputs = bert_module(bert_inputs, signature='tokens', as_dict=True)
             sequence_output = bert_outputs['sequence_output']
+            if self.verbose:
+                bert_ner_logger.info('The BERT model has been loaded from the TF-Hub.')
         else:
             if self.PATH_TO_BERT is None:
                 raise ValueError('Path to the BERT model is not defined!')
@@ -151,6 +153,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             init_checkpoint = os.path.join(self.PATH_TO_BERT, 'bert_model.ckpt')
             (assignment_map, initialized_variable_names) = get_assignment_map_from_checkpoint(tvars, init_checkpoint)
             tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
+            if self.verbose:
+                bert_ner_logger.info('The BERT model has been loaded from a local drive.')
         n_tags = len(self.classes_list_) * 2 + 1
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
@@ -647,6 +651,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     bert_module = tfhub.Module(self.bert_hub_module_handle, trainable=True)
                     bert_outputs = bert_module(bert_inputs, signature='tokens', as_dict=True)
                     sequence_output = bert_outputs['sequence_output']
+                    if self.verbose:
+                        bert_ner_logger.info('The BERT model has been loaded from the TF-Hub.')
                 else:
                     if self.PATH_TO_BERT is None:
                         raise ValueError('Path to the BERT model is not defined!')
@@ -679,6 +685,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                         tvars, init_checkpoint
                     )
                     tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
+                    if self.verbose:
+                        bert_ner_logger.info('The BERT model has been loaded from a local drive.')
                 n_tags = len(self.classes_list_) * 2 + 1
                 he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
                 glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
