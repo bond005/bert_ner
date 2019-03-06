@@ -73,9 +73,9 @@ class TestBertNer(unittest.TestCase):
         true_err_msg = re.escape('`bert_hub_module_handle` is not specified!')
         with self.assertRaisesRegex(ValueError, true_err_msg):
             BERT_NER.check_params(
-                finetune_bert=True,
-                batch_size=32, max_seq_length=512, lr=1e-3, l2_reg=1e-4, clip_norm=5.0, validation_fraction=0.1,
-                max_epochs=10, patience=3, gpu_memory_frac=1.0, verbose=False, random_seed=42, lstm_units=128
+                finetune_bert=True, batch_size=32, max_seq_length=512, lr=1e-3, l2_reg=1e-4, clip_norm=5.0,
+                validation_fraction=0.1, max_epochs=10, patience=3, gpu_memory_frac=1.0, verbose=False, random_seed=42,
+                lstm_units=128
             )
 
     def test_check_params_negative002(self):
@@ -2105,7 +2105,6 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
-        self.assertTrue(hasattr(res, 'bert_module_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
@@ -2153,7 +2152,6 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.verbose, bool)
         self.assertEqual(res.random_seed, 42)
         self.assertTrue(hasattr(res, 'classes_list_'))
-        self.assertTrue(hasattr(res, 'bert_module_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
@@ -2200,7 +2198,6 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
-        self.assertTrue(hasattr(res, 'bert_module_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
@@ -2247,7 +2244,6 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
-        self.assertTrue(hasattr(res, 'bert_module_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
@@ -2310,7 +2306,6 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
-        self.assertTrue(hasattr(res, 'bert_module_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
@@ -2456,7 +2451,6 @@ class TestBertNer(unittest.TestCase):
         self.assertTrue(hasattr(self.another_ner, 'validation_fraction'))
         self.assertTrue(hasattr(self.another_ner, 'verbose'))
         self.assertTrue(hasattr(self.another_ner, 'classes_list_'))
-        self.assertTrue(hasattr(self.another_ner, 'bert_module_'))
         self.assertTrue(hasattr(self.another_ner, 'logits_'))
         self.assertTrue(hasattr(self.another_ner, 'transition_params_'))
         self.assertTrue(hasattr(self.another_ner, 'tokenizer_'))
@@ -2480,7 +2474,6 @@ class TestBertNer(unittest.TestCase):
         self.assertAlmostEqual(self.ner.validation_fraction, self.another_ner.validation_fraction)
         self.assertEqual(self.ner.verbose, self.another_ner.verbose)
         self.assertIs(self.ner.classes_list_, self.another_ner.classes_list_)
-        self.assertIs(self.ner.bert_module_, self.another_ner.bert_module_)
         self.assertIs(self.ner.logits_, self.another_ner.logits_)
         self.assertIs(self.ner.transition_params_, self.another_ner.transition_params_)
         self.assertIs(self.ner.tokenizer_, self.another_ner.tokenizer_)

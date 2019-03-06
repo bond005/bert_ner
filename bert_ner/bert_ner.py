@@ -12,18 +12,22 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils.validation import check_is_fitted
 import tensorflow as tf
 import tensorflow_hub as tfhub
-from bert.tokenization import FullTokenizer
+from bert.tokenization import FullTokenizer, validate_case_matches_checkpoint
+from bert.modeling import BertModel, BertConfig
 
 
 bert_ner_logger = logging.getLogger(__name__)
 
 
 class BERT_NER(BaseEstimator, ClassifierMixin):
-    def __init__(self, bert_hub_module_handle: str='https://tfhub.dev/google/bert_multi_cased_L-12_H-768_A-12/1',
-                 finetune_bert: bool=False, batch_size: int=32, max_seq_length: int=512, lr: float=1e-3,
-                 lstm_units: Union[int, None]=256, l2_reg: float=1e-4, clip_norm: Union[float, None]=5.0,
-                 validation_fraction: float=0.1, max_epochs: int=10, patience: int=3, gpu_memory_frac: float=1.0,
-                 verbose: bool=False, random_seed: Union[int, None]=None):
+    PATH_TO_BERT = None
+
+    def __init__(self, finetune_bert: bool=False,
+                 bert_hub_module_handle: Union[str, None]='https://tfhub.dev/google/bert_multi_cased_L-12_H-768_A-12/1',
+                 batch_size: int=32, max_seq_length: int=512, lr: float=1e-3, lstm_units: Union[int, None]=256,
+                 l2_reg: float=1e-4, clip_norm: Union[float, None]=5.0, validation_fraction: float=0.1,
+                 max_epochs: int=10, patience: int=3, gpu_memory_frac: float=1.0, verbose: bool=False,
+                 random_seed: Union[int, None]=None):
         self.batch_size = batch_size
         self.lr = lr
         self.l2_reg = l2_reg
@@ -50,8 +54,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.segment_ids_
         if hasattr(self, 'y_ph_'):
             del self.y_ph_
-        if hasattr(self, 'bert_module_'):
-            del self.bert_module_
         if hasattr(self, 'logits_'):
             del self.logits_
         if hasattr(self, 'transition_params_'):
@@ -82,8 +84,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.segment_ids_
         if hasattr(self, 'y_ph_'):
             del self.y_ph_
-        if hasattr(self, 'bert_module_'):
-            del self.bert_module_
         if hasattr(self, 'logits_'):
             del self.logits_
         if hasattr(self, 'transition_params_'):
@@ -101,11 +101,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         config = tf.ConfigProto()
         config.gpu_options.per_process_gpu_memory_fraction = self.gpu_memory_frac
         self.sess_ = tf.Session(config=config)
-        self.bert_module_ = tfhub.Module(self.bert_hub_module_handle, trainable=True)
-        tokenization_info = self.bert_module_(signature='tokenization_info', as_dict=True)
-        vocab_file, do_lower_case = self.sess_.run([tokenization_info['vocab_file'],
-                                                    tokenization_info['do_lower_case']])
-        self.tokenizer_ = FullTokenizer(vocab_file=vocab_file, do_lower_case=do_lower_case)
         self.input_ids_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
                                          name='input_ids')
         self.input_mask_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
@@ -118,9 +113,41 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             input_mask=self.input_mask_,
             segment_ids=self.segment_ids_
         )
-        bert_outputs = self.bert_module_(bert_inputs, signature='tokens', as_dict=True)
-        sequence_output = bert_outputs['sequence_output']
-        n_tags = len(self.classes_list_) * 2 + 3
+        if self.bert_hub_module_handle is not None:
+            bert_module = tfhub.Module(self.bert_hub_module_handle, trainable=True)
+            tokenization_info = bert_module(signature='tokenization_info', as_dict=True)
+            vocab_file, do_lower_case = self.sess_.run([tokenization_info['vocab_file'],
+                                                        tokenization_info['do_lower_case']])
+            self.tokenizer_ = FullTokenizer(vocab_file=vocab_file, do_lower_case=do_lower_case)
+            bert_outputs = bert_module(bert_inputs, signature='tokens', as_dict=True)
+            sequence_output = bert_outputs['sequence_output']
+        else:
+            if self.PATH_TO_BERT is None:
+                raise ValueError('Path to the BERT model is not defined!')
+            path_to_bert = os.path.normpath(self.PATH_TO_BERT)
+            if not self.check_path_to_bert(path_to_bert):
+                raise ValueError('`path_to_bert` is wrong! There are no BERT files into the directory `{0}`.'.format(
+                    self.PATH_TO_BERT))
+            try:
+                validate_case_matches_checkpoint(True, os.path.join(path_to_bert, 'bert_model.ckpt'))
+                do_lower_case = True
+            except:
+                try:
+                    validate_case_matches_checkpoint(False, os.path.join(path_to_bert, 'bert_model.ckpt'))
+                    do_lower_case = False
+                except:
+                    do_lower_case = None
+            if do_lower_case is None:
+                raise ValueError('`{0}` is bad path to the BERT model, because a tokenization mode (lower case or no) '
+                                 'cannot be detected.'.format(path_to_bert))
+            bert_config = BertConfig.from_json_file(os.path.join(path_to_bert, 'bert_config.json'))
+            self.tokenizer_ = FullTokenizer(vocab_file=os.path.join(path_to_bert, 'vocab.txt'),
+                                            do_lower_case=do_lower_case)
+            bert_model = BertModel(config=bert_config, is_training=self.finetune_bert, input_ids=self.input_ids_,
+                                   input_mask=self.input_mask_, token_type_ids=self.segment_ids_,
+                                   use_one_hot_embeddings=False)
+            sequence_output = bert_model.sequence_output
+        n_tags = len(self.classes_list_) * 2 + 1
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
         sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
@@ -348,7 +375,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         return recognized_entities_in_texts
 
     def is_fitted(self):
-        check_is_fitted(self, ['classes_list_', 'bert_module_', 'logits_', 'transition_params_', 'tokenizer_',
+        check_is_fitted(self, ['classes_list_', 'logits_', 'transition_params_', 'tokenizer_',
                                'input_ids_', 'input_mask_', 'segment_ids_', 'y_ph_', 'sess_'])
 
     def score(self, X, y, sample_weight=None) -> float:
@@ -437,8 +464,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 else:
                     n = len(tokenized_text) + 1
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
-                y_tokenized[sample_idx][0] = len(self.classes_list_) * 2 + 1
-                y_tokenized[sample_idx][n] = len(self.classes_list_) * 2 + 2
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
@@ -475,7 +500,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             is_fitted = False
         if is_fitted:
             result.classes_list_ = self.classes_list_
-            result.bert_module_ = self.bert_module_
             result.logits_ = self.logits_
             result.transition_params_ = self.transition_params_
             result.tokenizer_ = self.tokenizer_
@@ -490,7 +514,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         cls = self.__class__
         result = cls.__new__(cls)
         result.set_params(
-            bert_hub_module_handle=self.bert_hub_module_handle, finetune_bert=self.finetune_bert,
+            bert_hub_module_handle=self.bert_hub_module_handle,  finetune_bert=self.finetune_bert,
             lstm_units=self.lstm_units, batch_size=self.batch_size, max_seq_length=self.max_seq_length, lr=self.lr,
             l2_reg=self.l2_reg, clip_norm=self.clip_norm, validation_fraction=self.validation_fraction,
             max_epochs=self.max_epochs, patience=self.patience, gpu_memory_frac=self.gpu_memory_frac,
@@ -503,7 +527,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             is_fitted = False
         if is_fitted:
             result.classes_list_ = self.classes_list_
-            result.bert_module_ = self.bert_module_
             result.logits_ = self.logits_
             result.transition_params_ = self.transition_params_
             result.tokenizer_ = self.tokenizer_
@@ -559,8 +582,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.segment_ids_
         if hasattr(self, 'y_ph_'):
             del self.y_ph_
-        if hasattr(self, 'bert_module_'):
-            del self.bert_module_
         if hasattr(self, 'logits_'):
             del self.logits_
         if hasattr(self, 'transition_params_'):
@@ -606,23 +627,49 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 config = tf.ConfigProto()
                 config.gpu_options.per_process_gpu_memory_fraction = self.gpu_memory_frac
                 self.sess_ = tf.Session(config=config)
-                self.bert_module_ = tfhub.Module(self.bert_hub_module_handle, trainable=True)
                 self.input_ids_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
                                                  name='input_ids')
                 self.input_mask_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
                                                   name='input_mask')
                 self.segment_ids_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
                                                    name='segment_ids')
-                self.y_ph_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
-                                            name='y_ph')
+                self.y_ph_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32, name='y_ph')
                 bert_inputs = dict(
                     input_ids=self.input_ids_,
                     input_mask=self.input_mask_,
                     segment_ids=self.segment_ids_
                 )
-                bert_outputs = self.bert_module_(bert_inputs, signature='tokens', as_dict=True)
-                sequence_output = bert_outputs['sequence_output']
-                n_tags = len(self.classes_list_) * 2 + 3
+                if self.bert_hub_module_handle is not None:
+                    bert_module = tfhub.Module(self.bert_hub_module_handle, trainable=True)
+                    bert_outputs = bert_module(bert_inputs, signature='tokens', as_dict=True)
+                    sequence_output = bert_outputs['sequence_output']
+                else:
+                    if self.PATH_TO_BERT is None:
+                        raise ValueError('Path to the BERT model is not defined!')
+                    path_to_bert = os.path.normpath(self.PATH_TO_BERT)
+                    if not self.check_path_to_bert(path_to_bert):
+                        raise ValueError(
+                            '`path_to_bert` is wrong! There are no BERT files into the directory `{0}`.'.format(
+                                self.PATH_TO_BERT))
+                    try:
+                        validate_case_matches_checkpoint(True, os.path.join(path_to_bert, 'bert_model.ckpt'))
+                        do_lower_case = True
+                    except:
+                        try:
+                            validate_case_matches_checkpoint(False, os.path.join(path_to_bert, 'bert_model.ckpt'))
+                            do_lower_case = False
+                        except:
+                            do_lower_case = None
+                    if do_lower_case is None:
+                        raise ValueError('`{0}` is bad path to the BERT model, because a tokenization mode (lower case '
+                                         'or no) cannot be detected.'.format(path_to_bert))
+                    bert_config = BertConfig.from_json_file(os.path.join(path_to_bert, 'bert_config.json'))
+                    bert_model = BertModel(config=bert_config, is_training=self.finetune_bert,
+                                           input_ids=self.input_ids_,
+                                           input_mask=self.input_mask_, token_type_ids=self.segment_ids_,
+                                           use_one_hot_embeddings=False)
+                    sequence_output = bert_model.sequence_output
+                n_tags = len(self.classes_list_) * 2 + 1
                 he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
                 glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
                 sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
@@ -697,6 +744,22 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         return sorted(model_files)
 
     @staticmethod
+    def check_path_to_bert(dir_name: str) -> bool:
+        if not os.path.isdir(dir_name):
+            return False
+        if not os.path.isfile(os.path.join(dir_name, 'vocab.txt')):
+            return False
+        if not os.path.isfile(os.path.join(dir_name, 'bert_model.ckpt.data-00000-of-00001')):
+            return False
+        if not os.path.isfile(os.path.join(dir_name, 'bert_model.ckpt.index')):
+            return False
+        if not os.path.isfile(os.path.join(dir_name, 'bert_model.ckpt.meta')):
+            return False
+        if not os.path.isfile(os.path.join(dir_name, 'bert_config.json')):
+            return False
+        return True
+
+    @staticmethod
     def check_params(**kwargs):
         if 'batch_size' not in kwargs:
             raise ValueError('`batch_size` is not specified!')
@@ -745,11 +808,12 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                  'but {0} is not positive.'.format(kwargs['clip_norm']))
         if 'bert_hub_module_handle' not in kwargs:
             raise ValueError('`bert_hub_module_handle` is not specified!')
-        if not isinstance(kwargs['bert_hub_module_handle'], str):
-            raise ValueError('`bert_hub_module_handle` is wrong! Expected `{0}`, got `{1}`.'.format(
-                type('abc'), type(kwargs['bert_hub_module_handle'])))
-        if len(kwargs['bert_hub_module_handle']) < 1:
-            raise ValueError('`bert_hub_module_handle` is wrong! Expected a nonepty string.')
+        if kwargs['bert_hub_module_handle'] is not None:
+            if not isinstance(kwargs['bert_hub_module_handle'], str):
+                raise ValueError('`bert_hub_module_handle` is wrong! Expected `{0}`, got `{1}`.'.format(
+                    type('abc'), type(kwargs['bert_hub_module_handle'])))
+            if len(kwargs['bert_hub_module_handle']) < 1:
+                raise ValueError('`bert_hub_module_handle` is wrong! Expected a nonepty string.')
         if 'finetune_bert' not in kwargs:
             raise ValueError('`finetune_bert` is not specified!')
         if (not isinstance(kwargs['finetune_bert'], int)) and (not isinstance(kwargs['finetune_bert'], np.int32)) and \
