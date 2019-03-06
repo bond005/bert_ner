@@ -12,7 +12,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils.validation import check_is_fitted
 import tensorflow as tf
 import tensorflow_hub as tfhub
-from bert.tokenization import FullTokenizer, validate_case_matches_checkpoint
+from bert.tokenization import FullTokenizer
 from bert.modeling import BertModel, BertConfig, get_assignment_map_from_checkpoint
 
 
@@ -130,14 +130,12 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             if not self.check_path_to_bert(path_to_bert):
                 raise ValueError('`path_to_bert` is wrong! There are no BERT files into the directory `{0}`.'.format(
                     self.PATH_TO_BERT))
-            try:
-                validate_case_matches_checkpoint(True, os.path.join(path_to_bert, 'bert_model.ckpt'))
+            if os.path.basename(path_to_bert).find('_uncased_') >= 0:
                 do_lower_case = True
-            except:
-                try:
-                    validate_case_matches_checkpoint(False, os.path.join(path_to_bert, 'bert_model.ckpt'))
+            else:
+                if os.path.basename(path_to_bert).find('_cased_') >= 0:
                     do_lower_case = False
-                except:
+                else:
                     do_lower_case = None
             if do_lower_case is None:
                 raise ValueError('`{0}` is bad path to the BERT model, because a tokenization mode (lower case or no) '
@@ -154,7 +152,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             (assignment_map, initialized_variable_names) = get_assignment_map_from_checkpoint(tvars, init_checkpoint)
             tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
             if self.verbose:
-                bert_ner_logger.info('The BERT model has been loaded from a local drive.')
+                bert_ner_logger.info('The BERT model has been loaded from a local drive. '
+                                     '`do_lower_case` is {0}.'.format(do_lower_case))
         n_tags = len(self.classes_list_) * 2 + 1
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
@@ -661,14 +660,12 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                         raise ValueError(
                             '`path_to_bert` is wrong! There are no BERT files into the directory `{0}`.'.format(
                                 self.PATH_TO_BERT))
-                    try:
-                        validate_case_matches_checkpoint(True, os.path.join(path_to_bert, 'bert_model.ckpt'))
+                    if os.path.basename(path_to_bert).find('_uncased_') >= 0:
                         do_lower_case = True
-                    except:
-                        try:
-                            validate_case_matches_checkpoint(False, os.path.join(path_to_bert, 'bert_model.ckpt'))
+                    else:
+                        if os.path.basename(path_to_bert).find('_cased_') >= 0:
                             do_lower_case = False
-                        except:
+                        else:
                             do_lower_case = None
                     if do_lower_case is None:
                         raise ValueError('`{0}` is bad path to the BERT model, because a tokenization mode (lower case '
@@ -1144,7 +1141,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 found_idx = source_text[start_pos:].find(cur_token)
                 n = len(cur_token)
             if found_idx < 0:
-                raise ValueError('Text `{0}` cannot be tokenized!'.format(source_text))
+                raise ValueError('Text `{0}` cannot be tokenized! Tokens are: {1}'.format(source_text, tokenized_text))
             bounds_of_tokens.append((start_pos + found_idx, start_pos + found_idx + n))
             start_pos += (found_idx + n)
         return bounds_of_tokens
