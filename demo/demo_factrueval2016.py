@@ -49,6 +49,7 @@ def recognize(factrueval2016_testset_dir: str, recognizer: BERT_NER, results_dir
         factrueval2016_to_json(factrueval2016_testset_dir, temp_json_name)
         with codecs.open(temp_json_name, mode='r', encoding='utf-8', errors='ignore') as fp:
             data_for_testing = json.load(fp)
+        _, true_entities = load_dataset(temp_json_name)
     finally:
         if os.path.isfile(temp_json_name):
             os.remove(temp_json_name)
@@ -60,6 +61,11 @@ def recognize(factrueval2016_testset_dir: str, recognizer: BERT_NER, results_dir
             texts.append(cur_document['text'][cur_paragraph[0]:cur_paragraph[1]])
             additional_info.append((base_name, cur_paragraph))
     predicted_entities = recognizer.predict(texts)
+    f1, precision, recall = recognizer.calculate_prediction_quality(true_entities, predicted_entities,
+                                                                    recognizer.classes_list_)
+    print('F1-score is {0:.2%}.'.format(f1))
+    print('Precision is {0:.2%}.'.format(precision))
+    print('Recall is {0:.2%}.'.format(recall))
     results_for_factrueval_2016 = dict()
     for sample_idx, cur_result in enumerate(predicted_entities):
         base_name, paragraph_bounds = additional_info[sample_idx]

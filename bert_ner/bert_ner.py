@@ -308,9 +308,9 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             n_tokens = len(labels_in_text)
             tokens = self.tokenizer_.convert_ids_to_tokens(X_tokenized[0][sample_idx][1:(n_tokens - 1)])
             bounds_of_tokens = self.calculate_bounds_of_tokens(X[sample_idx], tokens)
-            recognized_entities_in_texts.append(
-                self.calculate_bounds_of_named_entities(bounds_of_tokens, self.classes_list_, labels_in_text)
-            )
+            new_entities = self.calculate_bounds_of_named_entities(bounds_of_tokens, self.classes_list_,
+                                                                   labels_in_text[1:(n_tokens - 1)])
+            recognized_entities_in_texts.append(new_entities)
         return recognized_entities_in_texts
 
     def is_fitted(self):
