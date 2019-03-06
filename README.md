@@ -88,7 +88,7 @@ f1, precision, recall = ner.calculate_prediction_quality(true_labels_for_testing
 
 You can serialize and de-serialize the BERT-NER object using the `pickle` module from Python’s standard library.
 
-####Note
+###Note
 
 You have to use short texts such as sentences or small paragraphs, because long texts will be processed worse. If you train the BERT-NER on corpus of long texts, then the training can be converged slowly. If you use the BERT-NER, trained on short texts, for recognizing of long text, then only some initial words of this text can be tagged, and remaining words at the end of text will not be considered by algorithm. Besides, you need to use a very large volume of RAM for processing of long texts.
 
