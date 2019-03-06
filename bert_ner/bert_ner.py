@@ -13,7 +13,7 @@ from sklearn.utils.validation import check_is_fitted
 import tensorflow as tf
 import tensorflow_hub as tfhub
 from bert.tokenization import FullTokenizer, validate_case_matches_checkpoint
-from bert.modeling import BertModel, BertConfig
+from bert.modeling import BertModel, BertConfig, get_assignment_map_from_checkpoint
 
 
 bert_ner_logger = logging.getLogger(__name__)
@@ -147,6 +147,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                    input_mask=self.input_mask_, token_type_ids=self.segment_ids_,
                                    use_one_hot_embeddings=False)
             sequence_output = bert_model.sequence_output
+            tvars = tf.trainable_variables()
+            init_checkpoint = os.path.join(self.PATH_TO_BERT, 'bert_model.ckpt')
+            (assignment_map, initialized_variable_names) = get_assignment_map_from_checkpoint(tvars, init_checkpoint)
+            tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
         n_tags = len(self.classes_list_) * 2 + 1
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
@@ -669,6 +673,12 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                            input_mask=self.input_mask_, token_type_ids=self.segment_ids_,
                                            use_one_hot_embeddings=False)
                     sequence_output = bert_model.sequence_output
+                    tvars = tf.trainable_variables()
+                    init_checkpoint = os.path.join(self.PATH_TO_BERT, 'bert_model.ckpt')
+                    (assignment_map, initialized_variable_names) = get_assignment_map_from_checkpoint(
+                        tvars, init_checkpoint
+                    )
+                    tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
                 n_tags = len(self.classes_list_) * 2 + 1
                 he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
                 glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
