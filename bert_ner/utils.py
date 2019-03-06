@@ -1,5 +1,4 @@
 import codecs
-import copy
 import json
 import os
 from typing import Dict, Tuple, List
