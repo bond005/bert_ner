@@ -483,14 +483,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
                     X_tokenized[1][sample_idx][token_idx] = 1
-                    if tokenized_text[token_idx] == '[CLS]':
-                        X_tokenized[3][token_idx][0] = 1.0
-                    elif tokenized_text[token_idx] == '[SEP]':
-                        X_tokenized[3][token_idx][1] = 1.0
-                    elif tokenized_text[token_idx].startswith('##'):
-                        X_tokenized[3][token_idx][2] = 1.0
-                    else:
-                        X_tokenized[3][token_idx][3] = 1.0
+                    X_tokenized[3][sample_idx][token_idx][self.get_subword_ID(tokenized_text[token_idx])] = 1.0
         else:
             for sample_idx in range(n_samples):
                 source_text = X[sample_idx]
@@ -516,14 +509,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
                     X_tokenized[1][sample_idx][token_idx] = 1
-                    if tokenized_text[token_idx] == '[CLS]':
-                        X_tokenized[3][token_idx][0] = 1.0
-                    elif tokenized_text[token_idx] == '[SEP]':
-                        X_tokenized[3][token_idx][1] = 1.0
-                    elif tokenized_text[token_idx].startswith('##'):
-                        X_tokenized[3][token_idx][2] = 1.0
-                    else:
-                        X_tokenized[3][token_idx][3] = 1.0
+                    X_tokenized[3][sample_idx][token_idx][self.get_subword_ID(tokenized_text[token_idx])] = 1.0
         if shapes_vocabulary is None:
             shapes_vocabulary_ = list(map(
                 lambda it2: it2[0],
@@ -1348,6 +1334,16 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     res[token_idx] = ne_id * 2
             prev_label_id = cur_label_id
         return res
+
+    @staticmethod
+    def get_subword_ID(subword: str) -> int:
+        if subword == '[CLS]':
+            return 0
+        if subword == '[SEP]':
+            return 1
+        if subword.startswith('##'):
+            return 2
+        return 3
 
     @staticmethod
     def get_shape_of_string(src: str) -> str:
