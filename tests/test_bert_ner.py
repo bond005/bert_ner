@@ -2105,15 +2105,20 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
+        self.assertTrue(hasattr(res, 'shapes_list_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
         self.assertTrue(hasattr(res, 'input_ids_'))
         self.assertTrue(hasattr(res, 'input_mask_'))
         self.assertTrue(hasattr(res, 'segment_ids_'))
+        self.assertTrue(hasattr(res, 'additional_features_'))
         self.assertTrue(hasattr(res, 'y_ph_'))
         self.assertTrue(hasattr(res, 'sess_'))
         self.assertEqual(res.classes_list_, ('LOCATION', 'ORG', 'PERSON'))
+        self.assertIsInstance(res.shapes_list_, tuple)
+        self.assertGreater(len(res.shapes_list_), 3)
+        self.assertEqual(res.shapes_list_[:-3:], ('[CLS]', '[SEP]', '[UNK]'))
 
     def test_fit_positive02(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
@@ -2152,15 +2157,20 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.verbose, bool)
         self.assertEqual(res.random_seed, 42)
         self.assertTrue(hasattr(res, 'classes_list_'))
+        self.assertTrue(hasattr(res, 'shapes_list_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
         self.assertTrue(hasattr(res, 'input_ids_'))
         self.assertTrue(hasattr(res, 'input_mask_'))
         self.assertTrue(hasattr(res, 'segment_ids_'))
+        self.assertTrue(hasattr(res, 'additional_features_'))
         self.assertTrue(hasattr(res, 'y_ph_'))
         self.assertTrue(hasattr(res, 'sess_'))
         self.assertEqual(res.classes_list_, ('LOCATION', 'ORG', 'PERSON'))
+        self.assertIsInstance(res.shapes_list_, tuple)
+        self.assertGreater(len(res.shapes_list_), 3)
+        self.assertEqual(res.shapes_list_[:-3:], ('[CLS]', '[SEP]', '[UNK]'))
 
     def test_fit_positive03(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
@@ -2198,15 +2208,20 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
+        self.assertTrue(hasattr(res, 'shapes_list_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
         self.assertTrue(hasattr(res, 'input_ids_'))
         self.assertTrue(hasattr(res, 'input_mask_'))
         self.assertTrue(hasattr(res, 'segment_ids_'))
+        self.assertTrue(hasattr(res, 'additional_features_'))
         self.assertTrue(hasattr(res, 'y_ph_'))
         self.assertTrue(hasattr(res, 'sess_'))
         self.assertEqual(res.classes_list_, ('LOCATION', 'ORG', 'PERSON'))
+        self.assertIsInstance(res.shapes_list_, tuple)
+        self.assertGreater(len(res.shapes_list_), 3)
+        self.assertEqual(res.shapes_list_[:-3:], ('[CLS]', '[SEP]', '[UNK]'))
 
     def test_fit_predict(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')
@@ -2244,15 +2259,20 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
+        self.assertTrue(hasattr(res, 'shapes_list_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
         self.assertTrue(hasattr(res, 'input_ids_'))
         self.assertTrue(hasattr(res, 'input_mask_'))
         self.assertTrue(hasattr(res, 'segment_ids_'))
+        self.assertTrue(hasattr(res, 'additional_features_'))
         self.assertTrue(hasattr(res, 'y_ph_'))
         self.assertTrue(hasattr(res, 'sess_'))
         self.assertEqual(res.classes_list_, ('LOCATION', 'ORG', 'PERSON'))
+        self.assertIsInstance(res.shapes_list_, tuple)
+        self.assertGreater(len(res.shapes_list_), 3)
+        self.assertEqual(res.shapes_list_[:-3:], ('[CLS]', '[SEP]', '[UNK]'))
         y_pred = res.predict(X_train)
         self.assertIsInstance(y_pred, list)
         self.assertEqual(len(X_train), len(y_pred))
@@ -2306,15 +2326,20 @@ class TestBertNer(unittest.TestCase):
         self.assertIsInstance(res.validation_fraction, float)
         self.assertIsInstance(res.verbose, bool)
         self.assertTrue(hasattr(res, 'classes_list_'))
+        self.assertTrue(hasattr(res, 'shapes_list_'))
         self.assertTrue(hasattr(res, 'logits_'))
         self.assertTrue(hasattr(res, 'transition_params_'))
         self.assertTrue(hasattr(res, 'tokenizer_'))
         self.assertTrue(hasattr(res, 'input_ids_'))
         self.assertTrue(hasattr(res, 'input_mask_'))
         self.assertTrue(hasattr(res, 'segment_ids_'))
+        self.assertTrue(hasattr(res, 'additional_features_'))
         self.assertTrue(hasattr(res, 'y_ph_'))
         self.assertTrue(hasattr(res, 'sess_'))
         self.assertEqual(res.classes_list_, ('LOCATION', 'ORG', 'PERSON'))
+        self.assertIsInstance(res.shapes_list_, tuple)
+        self.assertGreater(len(res.shapes_list_), 3)
+        self.assertEqual(res.shapes_list_[:-3:], ('[CLS]', '[SEP]', '[UNK]'))
         y_pred1 = res.predict(X_train)
         self.assertIsInstance(y_pred1, list)
         self.assertEqual(len(X_train), len(y_pred1))
@@ -2451,12 +2476,14 @@ class TestBertNer(unittest.TestCase):
         self.assertTrue(hasattr(self.another_ner, 'validation_fraction'))
         self.assertTrue(hasattr(self.another_ner, 'verbose'))
         self.assertTrue(hasattr(self.another_ner, 'classes_list_'))
+        self.assertTrue(hasattr(self.another_ner, 'shapes_list_'))
         self.assertTrue(hasattr(self.another_ner, 'logits_'))
         self.assertTrue(hasattr(self.another_ner, 'transition_params_'))
         self.assertTrue(hasattr(self.another_ner, 'tokenizer_'))
         self.assertTrue(hasattr(self.another_ner, 'input_ids_'))
         self.assertTrue(hasattr(self.another_ner, 'input_mask_'))
         self.assertTrue(hasattr(self.another_ner, 'segment_ids_'))
+        self.assertTrue(hasattr(self.another_ner, 'additional_features_'))
         self.assertTrue(hasattr(self.another_ner, 'y_ph_'))
         self.assertTrue(hasattr(self.another_ner, 'sess_'))
         self.assertEqual(self.ner.batch_size, self.another_ner.batch_size)
@@ -2474,12 +2501,14 @@ class TestBertNer(unittest.TestCase):
         self.assertAlmostEqual(self.ner.validation_fraction, self.another_ner.validation_fraction)
         self.assertEqual(self.ner.verbose, self.another_ner.verbose)
         self.assertIs(self.ner.classes_list_, self.another_ner.classes_list_)
+        self.assertIs(self.ner.shapes_list_, self.another_ner.shapes_list_)
         self.assertIs(self.ner.logits_, self.another_ner.logits_)
         self.assertIs(self.ner.transition_params_, self.another_ner.transition_params_)
         self.assertIs(self.ner.tokenizer_, self.another_ner.tokenizer_)
         self.assertIs(self.ner.input_ids_, self.another_ner.input_ids_)
         self.assertIs(self.ner.input_mask_, self.another_ner.input_mask_)
         self.assertIs(self.ner.segment_ids_, self.another_ner.segment_ids_)
+        self.assertIs(self.ner.additional_features_, self.another_ner.additional_features_)
         self.assertIs(self.ner.y_ph_, self.another_ner.y_ph_)
         self.assertIs(self.ner.sess_, self.another_ner.sess_)
 
@@ -2499,6 +2528,41 @@ class TestBertNer(unittest.TestCase):
         self.assertEqual(set(true_entities.keys()), set(calc_entities.keys()))
         for entity_type in true_entities:
             self.assertEqual(true_entities[entity_type], calc_entities[entity_type])
+
+    def test_get_shape_of_string_positive01(self):
+        src = '##чники'
+        dst = 'a'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
+
+    def test_get_shape_of_string_positive02(self):
+        src = 'уже'
+        dst = 'a'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
+
+    def test_get_shape_of_string_positive03(self):
+        src = 'К'
+        dst = 'A'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
+
+    def test_get_shape_of_string_positive04(self):
+        src = 'Однако'
+        dst = 'Aa'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
+
+    def test_get_shape_of_string_positive05(self):
+        src = '66–67'
+        dst = 'D-D'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
+
+    def test_get_shape_of_string_positive06(self):
+        src = '[UNK]'
+        dst = '[UNK]'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
+
+    def test_get_shape_of_string_positive07(self):
+        src = '…'
+        dst = 'U'
+        self.assertEqual(dst, BERT_NER.get_shape_of_string(src))
 
 
 if __name__ == '__main__':

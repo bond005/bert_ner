@@ -44,6 +44,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         self.verbose = verbose
 
     def __del__(self):
+        if hasattr(self, 'classes_list_'):
+            del self.classes_list_
+        if hasattr(self, 'shapes_list_'):
+            del self.shapes_list_
         if hasattr(self, 'tokenizer_'):
             del self.tokenizer_
         if hasattr(self, 'input_ids_'):
@@ -52,6 +56,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.input_mask_
         if hasattr(self, 'segment_ids_'):
             del self.segment_ids_
+        if hasattr(self, 'additional_features_'):
+            del self.additional_features_
         if hasattr(self, 'y_ph_'):
             del self.y_ph_
         if hasattr(self, 'logits_'):
@@ -74,6 +80,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             clip_norm=self.clip_norm, random_seed=self.random_seed
         )
         self.classes_list_ = self.check_Xy(X, 'X', y, 'y')
+        if hasattr(self, 'shapes_list_'):
+            del self.shapes_list_
         if hasattr(self, 'tokenizer_'):
             del self.tokenizer_
         if hasattr(self, 'input_ids_'):
@@ -82,6 +90,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.input_mask_
         if hasattr(self, 'segment_ids_'):
             del self.segment_ids_
+        if hasattr(self, 'additional_features_'):
+            del self.additional_features_
         if hasattr(self, 'y_ph_'):
             del self.y_ph_
         if hasattr(self, 'logits_'):
@@ -154,34 +164,39 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             if self.verbose:
                 bert_ner_logger.info('The BERT model has been loaded from a local drive. '
                                      '`do_lower_case` is {0}.'.format(do_lower_case))
+        X_tokenized, y_tokenized, self.shapes_list_ = self.tokenize_all(X, y)
+        self.additional_features_ = tf.placeholder(
+            shape=(self.batch_size, self.max_seq_length, len(self.shapes_list_) + 4), dtype=tf.float32,
+            name='additional_features'
+        )
         n_tags = len(self.classes_list_) * 2 + 1
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
         sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
         if self.lstm_units is None:
             if self.finetune_bert:
-                self.logits_ = tf.layers.dense(sequence_output, n_tags, activation=None,
-                                               kernel_regularizer=tf.nn.l2_loss,
+                self.logits_ = tf.layers.dense(tf.concat([sequence_output, self.additional_features_]), n_tags,
+                                               activation=None, kernel_regularizer=tf.nn.l2_loss,
                                                kernel_initializer=he_init, name='outputs_of_NER')
             else:
                 sequence_output_stop = tf.stop_gradient(sequence_output)
-                self.logits_ = tf.layers.dense(sequence_output_stop, n_tags, activation=None,
-                                               kernel_regularizer=tf.nn.l2_loss, kernel_initializer=he_init,
-                                               name='outputs_of_NER')
+                self.logits_ = tf.layers.dense(tf.concat([sequence_output_stop, self.additional_features_]), n_tags,
+                                               activation=None, kernel_regularizer=tf.nn.l2_loss,
+                                               kernel_initializer=he_init, name='outputs_of_NER')
         else:
             if self.finetune_bert:
                 with tf.name_scope('bilstm_layer'):
                     rnn_cell = tf.keras.layers.LSTMCell(units=self.lstm_units, activation=tf.nn.tanh,
                                                         kernel_initializer=glorot_init)
                     rnn_layer = tf.keras.layers.Bidirectional(tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                    rnn_output = rnn_layer(sequence_output)
+                    rnn_output = rnn_layer(tf.concat([sequence_output, self.additional_features_]))
             else:
                 sequence_output_stop = tf.stop_gradient(sequence_output)
                 with tf.name_scope('bilstm_layer'):
                     rnn_cell = tf.keras.layers.LSTMCell(units=self.lstm_units, activation=tf.nn.tanh,
                                                         kernel_initializer=glorot_init)
                     rnn_layer = tf.keras.layers.Bidirectional(tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                    rnn_output = rnn_layer(sequence_output_stop)
+                    rnn_output = rnn_layer(tf.concat([sequence_output_stop, self.additional_features_]))
             self.logits_ = tf.layers.dense(rnn_output, n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                            kernel_initializer=he_init, name='outputs_of_NER')
         log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(self.logits_, self.y_ph_,
@@ -210,7 +225,6 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                                            self.transition_params_)
             seq_norm = tf.contrib.crf.crf_log_norm(self.logits_, sequence_lengths, self.transition_params_)
             accuracy = tf.reduce_mean(tf.cast(seq_scores, tf.float32) / tf.cast(seq_norm, tf.float32))
-        X_tokenized, y_tokenized = self.tokenize_all(X, y)
         if self.validation_fraction is not None:
             n_validation = int(round(len(X) * self.validation_fraction))
             if n_validation > 0:
@@ -227,12 +241,12 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 labels_for_splitting = np.array(labels_for_splitting, dtype=object)
                 train_index, test_index = next(sss.split(X_tokenized[0], labels_for_splitting))
                 X_train, y_train = self.extend_Xy(
-                    [X_tokenized[0][train_index], X_tokenized[1][train_index], X_tokenized[2][train_index]],
+                    [X_tokenized[channel_idx][train_index] for channel_idx in range(len(X_tokenized))],
                     y_tokenized[train_index],
                     shuffle=True
                 )
                 X_val, y_val = self.extend_Xy(
-                    [X_tokenized[0][test_index], X_tokenized[1][test_index], X_tokenized[2][test_index]],
+                    [X_tokenized[channel_idx][test_index] for channel_idx in range(len(X_tokenized))],
                     y_tokenized[test_index],
                     shuffle=True
                 )
@@ -278,11 +292,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 random.shuffle(bounds_of_batches_for_training)
                 feed_dict_for_batch = None
                 for cur_batch in bounds_of_batches_for_training:
-                    X_batch = [
-                        X_train[0][cur_batch[0]:cur_batch[1]],
-                        X_train[1][cur_batch[0]:cur_batch[1]],
-                        X_train[2][cur_batch[0]:cur_batch[1]]
-                    ]
+                    X_batch = [X_train[channel_idx][cur_batch[0]:cur_batch[1]] for channel_idx in range(len(X_train))]
                     y_batch = y_train[cur_batch[0]:cur_batch[1]]
                     feed_dict_for_batch = self.fill_feed_dict(X_batch, y_batch)
                     self.sess_.run(train_op, feed_dict=feed_dict_for_batch)
@@ -290,11 +300,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 if bounds_of_batches_for_validation is not None:
                     acc_test = 0.0
                     for cur_batch in bounds_of_batches_for_validation:
-                        X_batch = [
-                            X_val[0][cur_batch[0]:cur_batch[1]],
-                            X_val[1][cur_batch[0]:cur_batch[1]],
-                            X_val[2][cur_batch[0]:cur_batch[1]]
-                        ]
+                        X_batch = [X_val[channel_idx][cur_batch[0]:cur_batch[1]] for channel_idx in range(len(X_val))]
                         y_batch = y_val[cur_batch[0]:cur_batch[1]]
                         feed_dict_for_batch = self.fill_feed_dict(X_batch, y_batch)
                         acc_test += self.batch_size * accuracy.eval(feed_dict=feed_dict_for_batch, session=self.sess_)
@@ -345,7 +351,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         )
         self.check_X(X, 'X')
         self.is_fitted()
-        X_tokenized, _ = self.tokenize_all(X)
+        X_tokenized, _, _ = self.tokenize_all(X, shapes_vocabulary=self.shapes_list_)
         n_samples = X_tokenized[0].shape[0]
         X_tokenized = self.extend_Xy(X_tokenized)
         n_batches = X_tokenized[0].shape[0] // self.batch_size
@@ -358,9 +364,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         for cur_batch in bounds_of_batches:
             feed_dict = self.fill_feed_dict(
                 [
-                    X_tokenized[0][cur_batch[0]:cur_batch[1]],
-                    X_tokenized[1][cur_batch[0]:cur_batch[1]],
-                    X_tokenized[2][cur_batch[0]:cur_batch[1]]
+                    X_tokenized[channel_idx][cur_batch[0]:cur_batch[1]]
+                    for channel_idx in range(len(X_tokenized))
                 ]
             )
             logits, trans_params, mask = self.sess_.run([self.logits_, self.transition_params_, self.input_mask_],
@@ -382,8 +387,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         return recognized_entities_in_texts
 
     def is_fitted(self):
-        check_is_fitted(self, ['classes_list_', 'logits_', 'transition_params_', 'tokenizer_',
-                               'input_ids_', 'input_mask_', 'segment_ids_', 'y_ph_', 'sess_'])
+        check_is_fitted(self, ['classes_list_', 'shapes_list_', 'logits_', 'transition_params_', 'tokenizer_',
+                               'input_ids_', 'input_mask_', 'segment_ids_', 'additional_features_', 'y_ph_', 'sess_'])
 
     def score(self, X, y, sample_weight=None) -> float:
         y_pred = self.predict(X)
@@ -393,9 +398,11 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         return self.fit(X, y).predict(X)
 
     def fill_feed_dict(self, X: List[np.array], y: np.array=None) -> dict:
-        assert len(X) == 3
+        assert len(X) == 4
         assert len(X[0]) == self.batch_size
-        feed_dict = {ph: x for ph, x in zip([self.input_ids_, self.input_mask_, self.segment_ids_], X)}
+        feed_dict = {
+            ph: x for ph, x in zip([self.input_ids_, self.input_mask_, self.segment_ids_, self.additional_features_], X)
+        }
         if y is not None:
             feed_dict[self.y_ph_] = y
         return feed_dict
@@ -435,30 +442,64 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             return [X_ext[idx][indices] for idx in range(len(X_ext))], y_ext[indices]
         return X_ext, y_ext
 
-    def tokenize_all(self, X: Union[list, tuple, np.array],
-                     y: Union[list, tuple, np.array]=None) -> Tuple[List[np.ndarray], Union[np.ndarray, None]]:
+    def tokenize_all(self, X: Union[list, tuple, np.array], y: Union[list, tuple, np.array]=None,
+                     shapes_vocabulary: Union[tuple, None]=None) -> Tuple[List[np.ndarray], Union[np.ndarray, None],
+                                                                          tuple]:
+        if shapes_vocabulary is not None:
+            if len(shapes_vocabulary) < 4:
+                raise ValueError('Shapes vocabulary is wrong!')
+            if shapes_vocabulary[-1] != '[UNK]':
+                raise ValueError('Shapes vocabulary is wrong!')
+            if shapes_vocabulary[-2] != '[SEP]':
+                raise ValueError('Shapes vocabulary is wrong!')
+            if shapes_vocabulary[-3] != '[CLS]':
+                raise ValueError('Shapes vocabulary is wrong!')
         X_tokenized = [
             np.zeros((len(X), self.max_seq_length), dtype=np.int32),
             np.zeros((len(X), self.max_seq_length), dtype=np.int32),
-            np.zeros((len(X), self.max_seq_length), dtype=np.int32)
+            np.zeros((len(X), self.max_seq_length), dtype=np.int32),
+            np.zeros((len(X), self.max_seq_length, 4), dtype=np.float32)
         ]
         y_tokenized = None if y is None else np.empty((len(y), self.max_seq_length), dtype=np.int32)
         n_samples = len(X)
+        shapes = []
+        shapes_dict = dict()
         if y is None:
             for sample_idx in range(n_samples):
                 source_text = X[sample_idx]
                 tokenized_text = self.tokenizer_.tokenize(source_text)
+                shapes_of_text = [self.get_shape_of_string(cur) for cur in tokenized_text]
+                if shapes_vocabulary is None:
+                    for cur_shape in shapes_of_text:
+                        if cur_shape != '[UNK]':
+                            shapes_dict[cur_shape] = shapes_dict.get(cur_shape, 0) + 1
                 if len(tokenized_text) > (self.max_seq_length - 2):
                     tokenized_text = tokenized_text[:(self.max_seq_length - 2)]
+                    shapes_of_text = shapes_of_text[:(self.max_seq_length - 2)]
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
+                shapes_of_text = ['[CLS]'] + shapes_of_text + ['[SEP]']
+                shapes.append(shapes_of_text)
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
                     X_tokenized[1][sample_idx][token_idx] = 1
+                    if tokenized_text[token_idx] == '[CLS]':
+                        X_tokenized[3][token_idx][0] = 1.0
+                    elif tokenized_text[token_idx] == '[SEP]':
+                        X_tokenized[3][token_idx][1] = 1.0
+                    elif tokenized_text[token_idx].startswith('##'):
+                        X_tokenized[3][token_idx][2] = 1.0
+                    else:
+                        X_tokenized[3][token_idx][3] = 1.0
         else:
             for sample_idx in range(n_samples):
                 source_text = X[sample_idx]
                 tokenized_text = self.tokenizer_.tokenize(source_text)
+                shapes_of_text = [self.get_shape_of_string(cur) for cur in tokenized_text]
+                if shapes_vocabulary is None:
+                    for cur_shape in shapes_of_text:
+                        if cur_shape != '[UNK]':
+                            shapes_dict[cur_shape] = shapes_dict.get(cur_shape, 0) + 1
                 bounds_of_tokens = self.calculate_bounds_of_tokens(source_text, tokenized_text)
                 indices_of_named_entities, labels_IDs = self.calculate_indices_of_named_entities(
                     source_text, self.classes_list_, y[sample_idx])
@@ -466,24 +507,53 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     tokenized_text, bounds_of_tokens, indices_of_named_entities, labels_IDs, self.max_seq_length
                 )
                 if len(tokenized_text) > (self.max_seq_length - 2):
-                    n = self.max_seq_length - 1
                     tokenized_text = tokenized_text[:(self.max_seq_length - 2)]
-                else:
-                    n = len(tokenized_text) + 1
+                    shapes_of_text = shapes_of_text[:(self.max_seq_length - 2)]
                 tokenized_text = ['[CLS]'] + tokenized_text + ['[SEP]']
+                shapes_of_text = ['[CLS]'] + shapes_of_text + ['[SEP]']
+                shapes.append(shapes_of_text)
                 token_IDs = self.tokenizer_.convert_tokens_to_ids(tokenized_text)
                 for token_idx in range(len(tokenized_text)):
                     X_tokenized[0][sample_idx][token_idx] = token_IDs[token_idx]
                     X_tokenized[1][sample_idx][token_idx] = 1
-        return X_tokenized, (None if y is None else np.array(y_tokenized))
+                    if tokenized_text[token_idx] == '[CLS]':
+                        X_tokenized[3][token_idx][0] = 1.0
+                    elif tokenized_text[token_idx] == '[SEP]':
+                        X_tokenized[3][token_idx][1] = 1.0
+                    elif tokenized_text[token_idx].startswith('##'):
+                        X_tokenized[3][token_idx][2] = 1.0
+                    else:
+                        X_tokenized[3][token_idx][3] = 1.0
+        if shapes_vocabulary is None:
+            shapes_vocabulary_ = list(map(
+                lambda it2: it2[0],
+                filter(
+                    lambda it1: it1[1] >= 3,
+                    [(cur_shape, shapes_dict[cur_shape]) for cur_shape in sorted(list(shapes_dict.keys()))]
+                )
+            ))
+            shapes_vocabulary_ += ['[CLS]', '[SEP]', '[UNK]']
+            shapes_vocabulary_ = tuple(shapes_vocabulary_)
+        else:
+            shapes_vocabulary_ = shapes_vocabulary
+        shapes_ = np.zeros((len(X), self.max_seq_length, len(shapes_vocabulary_)), dtype=np.float32)
+        for sample_idx in range(n_samples):
+            for token_idx, cur_shape in enumerate(shapes[sample_idx]):
+                if cur_shape in shapes_vocabulary_:
+                    shape_ID = shapes_vocabulary_.index(cur_shape)
+                else:
+                    shape_ID = len(shapes_vocabulary_) - 1
+                shapes_[sample_idx][token_idx][shape_ID] = 1.0
+        X_tokenized[3] = np.concatenate((X_tokenized[3], shapes_), axis=-1)
+        del shapes_, shapes
+        return X_tokenized, (None if y is None else np.array(y_tokenized)), shapes_vocabulary_
 
     def get_params(self, deep=True) -> dict:
         return {'bert_hub_module_handle': self.bert_hub_module_handle, 'finetune_bert': self.finetune_bert,
                 'lstm_units': self.lstm_units, 'batch_size': self.batch_size, 'max_seq_length': self.max_seq_length,
-                'lr': self.lr, 'l2_reg': self.l2_reg, 'clip_norm': self.clip_norm,
-                'validation_fraction': self.validation_fraction, 'max_epochs': self.max_epochs,
-                'patience': self.patience, 'gpu_memory_frac': self.gpu_memory_frac, 'verbose': self.verbose,
-                'random_seed': self.random_seed}
+                'lr': self.lr, 'l2_reg': self.l2_reg, 'clip_norm': self.clip_norm, 'max_epochs': self.max_epochs,
+                'patience': self.patience, 'validation_fraction': self.validation_fraction,
+                'gpu_memory_frac': self.gpu_memory_frac, 'verbose': self.verbose, 'random_seed': self.random_seed}
 
     def set_params(self, **params):
         for parameter, value in params.items():
@@ -507,12 +577,14 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             is_fitted = False
         if is_fitted:
             result.classes_list_ = self.classes_list_
+            result.shapes_list_ = self.shapes_list_
             result.logits_ = self.logits_
             result.transition_params_ = self.transition_params_
             result.tokenizer_ = self.tokenizer_
             result.input_ids_ = self.input_ids_
             result.input_mask_ = self.input_mask_
             result.segment_ids_ = self.segment_ids_
+            result.additional_features_ = self.additional_features_
             result.y_ph_ = self.y_ph_
             result.sess_ = self.sess_
         return result
@@ -534,12 +606,14 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             is_fitted = False
         if is_fitted:
             result.classes_list_ = self.classes_list_
+            result.shapes_list_ = self.shapes_list_
             result.logits_ = self.logits_
             result.transition_params_ = self.transition_params_
             result.tokenizer_ = self.tokenizer_
             result.input_ids_ = self.input_ids_
             result.input_mask_ = self.input_mask_
             result.segment_ids_ = self.segment_ids_
+            result.additional_features_ = self.additional_features_
             result.y_ph_ = self.y_ph_
             result.sess_ = self.sess_
         return result
@@ -559,6 +633,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         params = self.get_params(True)
         if is_fitted:
             params['classes_list_'] = copy.copy(self.classes_list_)
+            params['shapes_list_'] = copy.copy(self.shapes_list_)
             params['tokenizer_'] = copy.deepcopy(self.tokenizer_)
             model_file_name = self.get_temp_model_name()
             try:
@@ -587,6 +662,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             del self.input_mask_
         if hasattr(self, 'segment_ids_'):
             del self.segment_ids_
+        if hasattr(self, 'additional_features_'):
+            del self.additional_features_
         if hasattr(self, 'y_ph_'):
             del self.y_ph_
         if hasattr(self, 'logits_'):
@@ -599,7 +676,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             self.sess_.close()
             del self.sess_
         tf.reset_default_graph()
-        is_fitted = ('classes_list_' in new_params) and ('tokenizer_' in new_params) and  ('model_name_' in new_params)
+        is_fitted = ('classes_list_' in new_params) and ('shapes_list_' in new_params) and \
+                    ('tokenizer_' in new_params) and  ('model_name_' in new_params)
         model_files = list(
             filter(
                 lambda it3: len(it3) > 0,
@@ -622,6 +700,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     raise ValueError('File `{0}` exists, and so it cannot be used for data transmission!'.format(cur))
             self.set_params(**new_params)
             self.classes_list_ = copy.copy(new_params['classes_list_'])
+            self.shapes_list_ = copy.copy(new_params['shapes_list_'])
             self.tokenizer_ = copy.deepcopy(new_params['tokenizer_'])
             if self.random_seed is None:
                 self.random_seed = int(round(time.time()))
@@ -640,6 +719,10 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                                   name='input_mask')
                 self.segment_ids_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32,
                                                    name='segment_ids')
+                self.additional_features_ = tf.placeholder(
+                    shape=(self.batch_size, self.max_seq_length, len(self.shapes_list_) + 4), dtype=tf.float32,
+                    name='additional_features'
+                )
                 self.y_ph_ = tf.placeholder(shape=(self.batch_size, self.max_seq_length), dtype=tf.int32, name='y_ph')
                 bert_inputs = dict(
                     input_ids=self.input_ids_,
@@ -690,14 +773,15 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
                 if self.lstm_units is None:
                     if self.finetune_bert:
-                        self.logits_ = tf.layers.dense(sequence_output, n_tags, activation=None,
-                                                       kernel_regularizer=tf.nn.l2_loss,
+                        self.logits_ = tf.layers.dense(tf.concat([sequence_output, self.additional_features_]), n_tags,
+                                                       activation=None, kernel_regularizer=tf.nn.l2_loss,
                                                        kernel_initializer=he_init, name='outputs_of_NER')
                     else:
                         sequence_output_stop = tf.stop_gradient(sequence_output)
-                        self.logits_ = tf.layers.dense(sequence_output_stop, n_tags, activation=None,
-                                                       kernel_regularizer=tf.nn.l2_loss, kernel_initializer=he_init,
-                                                       name='outputs_of_NER')
+                        self.logits_ = tf.layers.dense(tf.concat([sequence_output_stop, self.additional_features_]),
+                                                       n_tags,
+                                                       activation=None, kernel_regularizer=tf.nn.l2_loss,
+                                                       kernel_initializer=he_init, name='outputs_of_NER')
                 else:
                     if self.finetune_bert:
                         with tf.name_scope('bilstm_layer'):
@@ -705,7 +789,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                                                 kernel_initializer=glorot_init)
                             rnn_layer = tf.keras.layers.Bidirectional(
                                 tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                            rnn_output = rnn_layer(sequence_output)
+                            rnn_output = rnn_layer(tf.concat([sequence_output, self.additional_features_]))
                     else:
                         sequence_output_stop = tf.stop_gradient(sequence_output)
                         with tf.name_scope('bilstm_layer'):
@@ -713,7 +797,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                                                 kernel_initializer=glorot_init)
                             rnn_layer = tf.keras.layers.Bidirectional(
                                 tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                            rnn_output = rnn_layer(sequence_output_stop)
+                            rnn_output = rnn_layer(tf.concat([sequence_output_stop, self.additional_features_]))
                     self.logits_ = tf.layers.dense(rnn_output, n_tags, activation=None,
                                                    kernel_regularizer=tf.nn.l2_loss,
                                                    kernel_initializer=he_init, name='outputs_of_NER')
@@ -1264,6 +1348,40 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     res[token_idx] = ne_id * 2
             prev_label_id = cur_label_id
         return res
+
+    @staticmethod
+    def get_shape_of_string(src: str) -> str:
+        if src in {'[UNK]', '[PAD]', '[CLS]', '[SEP]'}:
+            return src
+        shape = ''
+        for idx in (range(2, len(src)) if src.startswith('##') else range(len(src))):
+            if src[idx] in {'_', chr(11791)}:
+                new_char = '_'
+            elif src[idx].isalpha():
+                if src[idx].isupper():
+                    new_char = 'A'
+                else:
+                    new_char = 'a'
+            elif src[idx].isdigit():
+                new_char = 'D'
+            elif src[idx] in {'.', ',', ':', ';', '-', '+', '!', '?', '#', '@', '$', '&', '=', '^', '`', '~', '*', '/',
+                              '\\', '(', ')', '[', ']', '{', '}', "'", '"', '|', '<', '>'}:
+                new_char = src[idx]
+            elif src[idx] in {chr(8213), chr(8212), chr(8211), chr(8210), chr(8209), chr(8208), chr(11834), chr(173),
+                              chr(8722), chr(8259)}:
+                new_char = '-'
+            elif src[idx] in {chr(8220), chr(8221), chr(11842), chr(171), chr(187), chr(128631), chr(128630),
+                              chr(128632), chr(12318), chr(12317), chr(12319)}:
+                new_char = '"'
+            elif src[idx] in {chr(39), chr(8216), chr(8217), chr(8218)}:
+                new_char = "'"
+            else:
+                new_char = 'U'
+            if len(shape) == '':
+                shape += new_char
+            elif shape[-1] != new_char:
+                shape += new_char
+        return shape
 
     @staticmethod
     def check_X(X: Union[list, tuple, np.array], X_name: str):
