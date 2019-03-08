@@ -422,7 +422,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     X[idx],
                     np.full(
                         shape=((n_extend, self.max_seq_length) if len(X[idx].shape) == 2 else
-                               (n_extend, self.max_seq_length, X[idx].shape[3])),
+                               (n_extend, self.max_seq_length, X[idx].shape[2])),
                         fill_value=X[idx][-1],
                         dtype=X[idx].dtype
                     )
