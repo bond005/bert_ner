@@ -420,7 +420,12 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             np.concatenate(
                 (
                     X[idx],
-                    np.full(shape=(n_extend, self.max_seq_length), fill_value=X[idx][-1], dtype=X[idx].dtype)
+                    np.full(
+                        shape=((n_extend, self.max_seq_length) if len(X[idx].shape) == 2 else
+                               (n_extend, self.max_seq_length, X[idx].shape[3])),
+                        fill_value=X[idx][-1],
+                        dtype=X[idx].dtype
+                    )
                 )
             )
             for idx in range(len(X))
