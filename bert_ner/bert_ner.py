@@ -175,13 +175,13 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
         sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
         if self.lstm_units is None:
             if self.finetune_bert:
-                self.logits_ = tf.layers.dense(tf.concat([sequence_output, self.additional_features_]), n_tags,
-                                               activation=None, kernel_regularizer=tf.nn.l2_loss,
+                self.logits_ = tf.layers.dense(tf.concat([sequence_output, self.additional_features_], axis=-1),
+                                               n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                                kernel_initializer=he_init, name='outputs_of_NER')
             else:
                 sequence_output_stop = tf.stop_gradient(sequence_output)
-                self.logits_ = tf.layers.dense(tf.concat([sequence_output_stop, self.additional_features_]), n_tags,
-                                               activation=None, kernel_regularizer=tf.nn.l2_loss,
+                self.logits_ = tf.layers.dense(tf.concat([sequence_output_stop, self.additional_features_], axis=-1),
+                                               n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                                kernel_initializer=he_init, name='outputs_of_NER')
         else:
             if self.finetune_bert:
@@ -189,14 +189,14 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                     rnn_cell = tf.keras.layers.LSTMCell(units=self.lstm_units, activation=tf.nn.tanh,
                                                         kernel_initializer=glorot_init)
                     rnn_layer = tf.keras.layers.Bidirectional(tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                    rnn_output = rnn_layer(tf.concat([sequence_output, self.additional_features_]))
+                    rnn_output = rnn_layer(tf.concat([sequence_output, self.additional_features_], axis=-1))
             else:
                 sequence_output_stop = tf.stop_gradient(sequence_output)
                 with tf.name_scope('bilstm_layer'):
                     rnn_cell = tf.keras.layers.LSTMCell(units=self.lstm_units, activation=tf.nn.tanh,
                                                         kernel_initializer=glorot_init)
                     rnn_layer = tf.keras.layers.Bidirectional(tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                    rnn_output = rnn_layer(tf.concat([sequence_output_stop, self.additional_features_]))
+                    rnn_output = rnn_layer(tf.concat([sequence_output_stop, self.additional_features_], axis=-1))
             self.logits_ = tf.layers.dense(rnn_output, n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                            kernel_initializer=he_init, name='outputs_of_NER')
         log_likelihood, transition_params = tf.contrib.crf.crf_log_likelihood(self.logits_, self.y_ph_,
@@ -759,14 +759,14 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 sequence_lengths = tf.reduce_sum(self.input_mask_, axis=1)
                 if self.lstm_units is None:
                     if self.finetune_bert:
-                        self.logits_ = tf.layers.dense(tf.concat([sequence_output, self.additional_features_]), n_tags,
-                                                       activation=None, kernel_regularizer=tf.nn.l2_loss,
+                        self.logits_ = tf.layers.dense(tf.concat([sequence_output, self.additional_features_], axis=-1),
+                                                       n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                                        kernel_initializer=he_init, name='outputs_of_NER')
                     else:
                         sequence_output_stop = tf.stop_gradient(sequence_output)
-                        self.logits_ = tf.layers.dense(tf.concat([sequence_output_stop, self.additional_features_]),
-                                                       n_tags,
-                                                       activation=None, kernel_regularizer=tf.nn.l2_loss,
+                        self.logits_ = tf.layers.dense(tf.concat([sequence_output_stop, self.additional_features_],
+                                                                 axis=-1),
+                                                       n_tags, activation=None, kernel_regularizer=tf.nn.l2_loss,
                                                        kernel_initializer=he_init, name='outputs_of_NER')
                 else:
                     if self.finetune_bert:
@@ -775,7 +775,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                                                 kernel_initializer=glorot_init)
                             rnn_layer = tf.keras.layers.Bidirectional(
                                 tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                            rnn_output = rnn_layer(tf.concat([sequence_output, self.additional_features_]))
+                            rnn_output = rnn_layer(tf.concat([sequence_output, self.additional_features_], axis=-1))
                     else:
                         sequence_output_stop = tf.stop_gradient(sequence_output)
                         with tf.name_scope('bilstm_layer'):
@@ -783,7 +783,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                                                                 kernel_initializer=glorot_init)
                             rnn_layer = tf.keras.layers.Bidirectional(
                                 tf.keras.layers.RNN(rnn_cell, return_sequences=True))
-                            rnn_output = rnn_layer(tf.concat([sequence_output_stop, self.additional_features_]))
+                            rnn_output = rnn_layer(tf.concat([sequence_output_stop, self.additional_features_],
+                                                             axis=-1))
                     self.logits_ = tf.layers.dense(rnn_output, n_tags, activation=None,
                                                    kernel_regularizer=tf.nn.l2_loss,
                                                    kernel_initializer=he_init, name='outputs_of_NER')
