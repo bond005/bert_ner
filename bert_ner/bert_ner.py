@@ -521,7 +521,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             shapes_vocabulary_ = list(map(
                 lambda it2: it2[0],
                 filter(
-                    lambda it1: (it1[1] >= 3) and (it[0] not in {'[CLS]', '[SEP]', '[UNK]'}),
+                    lambda it1: (it1[1] >= 3) and (it1[0] not in {'[CLS]', '[SEP]', '[UNK]'}),
                     [(cur_shape, shapes_dict[cur_shape]) for cur_shape in sorted(list(shapes_dict.keys()))]
                 )
             ))
