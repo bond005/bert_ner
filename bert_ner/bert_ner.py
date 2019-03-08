@@ -1377,7 +1377,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
                 new_char = "'"
             else:
                 new_char = 'U'
-            if len(shape) == '':
+            if len(shape) == 0:
                 shape += new_char
             elif shape[-1] != new_char:
                 shape += new_char
