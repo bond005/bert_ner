@@ -2118,7 +2118,7 @@ class TestBertNer(unittest.TestCase):
         self.assertEqual(res.classes_list_, ('LOCATION', 'ORG', 'PERSON'))
         self.assertIsInstance(res.shapes_list_, tuple)
         self.assertGreater(len(res.shapes_list_), 3)
-        self.assertEqual(res.shapes_list_[:-3:], ('[CLS]', '[SEP]', '[UNK]'))
+        self.assertEqual(res.shapes_list_[-3:], ('[CLS]', '[SEP]', '[UNK]'))
 
     def test_fit_positive02(self):
         base_dir = os.path.join(os.path.dirname(__file__), 'testdata')

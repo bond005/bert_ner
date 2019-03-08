@@ -169,6 +169,8 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             shape=(self.batch_size, self.max_seq_length, len(self.shapes_list_) + 4), dtype=tf.float32,
             name='additional_features'
         )
+        if self.verbose:
+            bert_ner_logger.info('Number of shapes is {0}.'.format(len(self.shapes_list_)))
         n_tags = len(self.classes_list_) * 2 + 1
         he_init = tf.contrib.layers.variance_scaling_initializer(seed=self.random_seed)
         glorot_init = tf.keras.initializers.glorot_uniform(seed=self.random_seed)
@@ -519,7 +521,7 @@ class BERT_NER(BaseEstimator, ClassifierMixin):
             shapes_vocabulary_ = list(map(
                 lambda it2: it2[0],
                 filter(
-                    lambda it1: it1[1] >= 3,
+                    lambda it1: (it1[1] >= 3) and (it[0] not in {'[CLS]', '[SEP]', '[UNK]'}),
                     [(cur_shape, shapes_dict[cur_shape]) for cur_shape in sorted(list(shapes_dict.keys()))]
                 )
             ))
